@@ -111,7 +111,7 @@ extern int32_t ASSETCHAINS_SEED,IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOS
 extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_STAKED;
 extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS], ASSETCHAINS_TIMELOCKGTE, ASSETCHAINS_NONCEMASK[];
 extern const char *ASSETCHAINS_ALGORITHMS[];
-extern int32_t VERUS_MIN_STAKEAGE, ASSETCHAINS_ALGO, ASSETCHAINS_EQUIHASH, ASSETCHAINS_LASTERA, ASSETCHAINS_LWMAPOS, ASSETCHAINS_NONCESHIFT[], ASSETCHAINS_HASHESPERROUND[];
+extern int32_t VERUS_MIN_STAKEAGE, ASSETCHAINS_ALGO, ASSETCHAINS_EQUIHASH, ASSETCHAINS_VERUSHASH, ASSETCHAINS_LASTERA, ASSETCHAINS_LWMAPOS, ASSETCHAINS_NONCESHIFT[], ASSETCHAINS_HASHESPERROUND[];
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern std::string NOTARY_PUBKEY;
 extern uint8_t NOTARY_PUBKEY33[33],ASSETCHAINS_OVERRIDE_PUBKEY33[33];
@@ -1148,17 +1148,20 @@ void static BitcoinMiner_noeq()
             {
                 arith_uint256 arNonce = UintToArith256(pblock->nNonce);
 
+                CVerusMiningHashWriter ss = CVerusMiningHashWriter(SER_GETHASH, PROTOCOL_VERSION);
+                ss << *((CBlockHeader *)pblock);
+
                 // for speed check 16 mega hash at a time
                 for (int i = 0; i < 0x1000000; i++)
                 {
                     solutionTargetChecks.increment();
 
                     // Update nNonce
-                    *((unsigned char *)&(pblock->nNonce)) = i & 0xff;
-                    *(((unsigned char *)&(pblock->nNonce))+1) = (i >> 8) & 0xff;
-                    *(((unsigned char *)&(pblock->nNonce))+2) = (i >> 16) & 0xff;
+                    ss.buf.charBuf[108] = *((unsigned char *)&(pblock->nNonce)) = i & 0xff;
+                    ss.buf.charBuf[109] = *(((unsigned char *)&(pblock->nNonce))+1) = (i >> 8) & 0xff;
+                    ss.buf.charBuf[110] = *(((unsigned char *)&(pblock->nNonce))+2) = (i >> 16) & 0xff;
 
-                    if ( UintToArith256(pblock->GetHash()) <= hashTarget )
+                    if ( UintToArith256(ss.GetHash()) <= hashTarget )
                     {
                         SetThreadPriority(THREAD_PRIORITY_NORMAL);
 
@@ -1744,6 +1747,11 @@ void static BitcoinMiner()
     {
         static boost::thread_group* minerThreads = NULL;
         
+        if (!IsCPUVerusOptimized() && ASSETCHAINS_ALGO == ASSETCHAINS_VERUSHASH)
+        {
+            nThreads = 0;
+        }
+
         if (nThreads < 0)
             nThreads = GetNumCores();
         

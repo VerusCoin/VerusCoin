@@ -1053,7 +1053,7 @@ int32_t CWallet::VerusStakeTransaction(CMutableTransaction &txNew, uint32_t &bnT
     if (!VerusSelectStakeOutput(hashResult, stakeSource, voutNum, tipindex->nHeight + 1, target) ||
         !Solver(stakeSource.vout[voutNum].scriptPubKey, whichType, vSolutions))
     {
-        LogPrintf("No eligible staking transaction found");
+        LogPrintf("No eligible staking transaction found\n");
         return 0;
     }
 
@@ -1572,7 +1572,7 @@ bool CWallet::IsMine(const CTransaction& tx)
 {
     for (int i = 0; i < tx.vout.size(); i++)
     {
-        if (IsMine(tx, i) == ISMINE_SPENDABLE)
+        if (IsMine(tx, i))
             return true;
     }
     return false;

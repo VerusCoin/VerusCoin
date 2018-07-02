@@ -1,4 +1,4 @@
-from subprocess import Popen, check_output
+from subprocess import Popen, check_output, call
 from time import sleep
 from os import environ, path
 
@@ -17,7 +17,7 @@ def start_daemon(daemon_wrapper):
 
 def fetch_zcash_params():
     try:
-        Popen("fetch-params", shell=True)
+        call("fetch-params", shell=True)
     except:
         exit(1)
 

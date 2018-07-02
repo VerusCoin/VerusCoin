@@ -10,7 +10,7 @@ cli_commands = ["getblockchaininfo", "getmininginfo", "getwalletinfo", "stop"]
 
 def start_daemon(daemon_wrapper):
     try:
-        Popen("%(daemon_wrapper)s --daemon" % locals(), shell=True)
+        Popen(daemon_wrapper, shell=True, close_fds=True)
     except:
         exit(1)
 

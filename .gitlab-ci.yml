@@ -216,7 +216,7 @@ windows:10:
   stage: test
   tags: ["Windows 10"]
   script:
-    - zip $VERUS_CLI_WINDOWS_PORTABLE
+    - PowerShell Expand-Archive -Path %VERUS_CLI_WINDOWS_PORTABLE% -DestinationPath %CI_PROJECT_DIR%
     - setx PATH "%PATH%\%CI_PROJECT_DIR%\verus-cli
     - python qa\verus-cli-tests\verus-cli-tester.py
   artifacts:

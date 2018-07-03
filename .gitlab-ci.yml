@@ -212,6 +212,20 @@ osx:high-sierra:
     - build:mac
 
 
+windows:10:
+  stage: test
+  tags: ["Windows 10"]
+  script:
+    - zip $VERUS_CLI_WINDOWS_PORTABLE
+    - setx PATH "%PATH%\%CI_PROJECT_DIR%\verus-cli
+    - python qa\verus-cli-tests\verus-cli-tester.py
+  artifacts:
+    paths: [log.txt]
+    expire_in: 1 week
+  dependencies:
+    - build:windows
+
+
 deploy:
   stage: deploy
   image: google/cloud-sdk:alpine

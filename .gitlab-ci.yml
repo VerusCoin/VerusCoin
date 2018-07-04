@@ -14,7 +14,7 @@ variables:
   VERUS_CLI_MACOS_PORTABLE: verus-cli-mac-v$VERSION-beta.tar.gz
 
 
-.build:linux:
+build:linux:
   image: asherd/veruscoin-cross-compiler:linux
   variables:
     DOCKER_DRIVER: overlay2
@@ -76,7 +76,7 @@ build:windows:
     expire_in: 1 week
 
 
-.build:mac:
+build:mac:
   stage: build
   tags: ["High Sierra"]
   cache:
@@ -148,7 +148,7 @@ license_management:
   artifacts:
     paths: [gl-license-management-report.json]
 
-.ubuntu:xenial:
+ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -166,7 +166,7 @@ license_management:
     - build:linux
 
 
-.ubuntu:bionic:
+ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2
@@ -212,7 +212,7 @@ license_management:
     - build:mac
 
 
-windows:10:
+.windows:10:
   stage: test
   tags: ["Windows 10"]
   script:
@@ -226,7 +226,7 @@ windows:10:
     - build:windows
 
 
-.deploy:
+deploy:
   stage: deploy
   image: google/cloud-sdk:alpine
   variables:

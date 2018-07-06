@@ -184,7 +184,7 @@ ubuntu:bionic:
     - build:linux
 
 
-.osx:sierra:
+osx:sierra:
   stage: test
   tags: ["Sierra"]
   script:
@@ -198,7 +198,7 @@ ubuntu:bionic:
     - build:mac
 
 
-.osx:high-sierra:
+osx:high-sierra:
   stage: test
   tags: ["High Sierra"]
   script:
@@ -212,7 +212,7 @@ ubuntu:bionic:
     - build:mac
 
 
-.windows:10:
+windows:10:
   stage: test
   tags: ["Windows 10"]
   script:

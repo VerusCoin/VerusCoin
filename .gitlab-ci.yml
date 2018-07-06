@@ -19,6 +19,11 @@ build:linux:
   variables:
     DOCKER_DRIVER: overlay2
   stage: build
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+    - depends/built
+    - .ccache
   before_script: # Setup Cache
     - rm -rf /root/.ccache || true
     - mv .ccache /root/ || true
@@ -131,6 +136,7 @@ sast:
         "registry.gitlab.com/gitlab-org/security-products/sast:$SP_VERSION" /app/bin/run /code
   artifacts:
     paths: [gl-sast-report.json]
+    
 
 
 license_management:
@@ -245,4 +251,5 @@ deploy:
     - echo "$AUTH_KEY" > AUTH_KEY.json
     - gcloud auth activate-service-account --key-file AUTH_KEY.json
     - gsutil rsync -r $CI_COMMIT_REF_NAME/ $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
+
 

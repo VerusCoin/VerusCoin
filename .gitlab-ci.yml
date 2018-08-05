@@ -4,17 +4,17 @@ stages:
   - deploy
 
 variables:
-  VERSION: 0.3.10
+  VERSION: 0.3.11
   AGAMA_ARTIFACTS_LINUX: linux64.tar.gz
   AGAMA_ARTIFACTS_MACOS: osx.tar.gz
   AGAMA_ARTIFACTS_WINDOWS: win64.zip
   VERUS_CLI_DEBIAN: verus-cli-v${VERSION}-beta-amd64.deb
   VERUS_CLI_LINUX_PORTABLE: verus-cli-linux-v$VERSION-beta.tar.gz
-  VERUS_CLI_WINDOWS_PORTABLE: verus-cli-windows-v$VERSION-beta.zip
+  VERUS_CLI_WINDOWS_PORTABLE: verus-cli-windows-v$VERSION-beta-portable.zip
   VERUS_CLI_MACOS_PORTABLE: verus-cli-mac-v$VERSION-beta.tar.gz
 
 
-build:linux:
+.build:linux:
   image: asherd/veruscoin-cross-compiler:linux
   variables:
     DOCKER_DRIVER: overlay2
@@ -81,7 +81,7 @@ build:windows:
     expire_in: 1 week
 
 
-build:mac:
+.build:mac:
   stage: build
   tags: ["High Sierra"]
   cache:
@@ -154,7 +154,7 @@ license_management:
   artifacts:
     paths: [gl-license-management-report.json]
 
-ubuntu:xenial:
+.ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -172,7 +172,7 @@ ubuntu:xenial:
     - build:linux
 
 
-ubuntu:bionic:
+.ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2
@@ -238,16 +238,16 @@ deploy:
   variables:
     DOCKER_DRIVER: overlay2
   dependencies:
-    - build:linux
+    #- build:linux
     - build:windows
-    - build:mac
+    #- build:mac
   script:
     - mkdir -p $CI_COMMIT_REF_NAME/Windows
-    - mkdir -p $CI_COMMIT_REF_NAME/Linux
-    - mkdir -p $CI_COMMIT_REF_NAME/MacOS
+    #- mkdir -p $CI_COMMIT_REF_NAME/Linux
+    #- mkdir -p $CI_COMMIT_REF_NAME/MacOS
     - mv $VERUS_CLI_WINDOWS_PORTABLE $AGAMA_ARTIFACTS_WINDOWS $CI_COMMIT_REF_NAME/Windows
-    - mv $VERUS_CLI_LINUX_PORTABLE $AGAMA_ARTIFACTS_LINUX $CI_COMMIT_REF_NAME/Linux
-    - mv $VERUS_CLI_MACOS_PORTABLE $AGAMA_ARTIFACTS_MACOS  $CI_COMMIT_REF_NAME/MacOS
+    #- mv $VERUS_CLI_LINUX_PORTABLE $AGAMA_ARTIFACTS_LINUX $CI_COMMIT_REF_NAME/Linux
+    #- mv $VERUS_CLI_MACOS_PORTABLE $AGAMA_ARTIFACTS_MACOS  $CI_COMMIT_REF_NAME/MacOS
     - echo "$AUTH_KEY" > AUTH_KEY.json
     - gcloud auth activate-service-account --key-file AUTH_KEY.json
     - gsutil rsync -r $CI_COMMIT_REF_NAME/ $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/

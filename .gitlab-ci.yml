@@ -14,7 +14,7 @@ variables:
   VERUS_CLI_MACOS_PORTABLE: verus-cli-mac-v$VERSION-beta.tar.gz
 
 
-.build:linux:
+build:linux:
   image: asherd/veruscoin-cross-compiler:linux
   variables:
     DOCKER_DRIVER: overlay2
@@ -81,7 +81,7 @@ build:windows:
     expire_in: 1 week
 
 
-.build:mac:
+build:mac:
   stage: build
   tags: ["High Sierra"]
   cache:
@@ -191,7 +191,7 @@ license_management:
     - build:linux
 
 
-.osx:sierra: # fetch-params.sh needs to be fixed for MacOS
+osx:sierra: # fetch-params.sh needs to be fixed for MacOS
   stage: test
   tags: ["Sierra"]
   script:
@@ -205,7 +205,7 @@ license_management:
     - build:mac
 
 
-.osx:high-sierra: # fetch-params.sh needs to be fixed for MacOS
+osx:high-sierra: # fetch-params.sh needs to be fixed for MacOS
   stage: test
   tags: ["High Sierra"]
   script:

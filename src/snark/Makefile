@@ -15,7 +15,7 @@ endif
 
 # To override these, use "make OPTFLAGS=..." etc.
 CURVE = BN128
-OPTFLAGS = -O2 -march=k8-sse3 -g -mtune=k8-sse3
+OPTFLAGS = -O2 -march=x86-64 -g -mtune=x86-64
 FEATUREFLAGS = -DUSE_ASM -DMONTGOMERY_OUTPUT
 
 # Initialize this using "CXXFLAGS=... make". The makefile appends to that.
@@ -158,7 +158,7 @@ ifeq ($(DEBUG),1)
 endif
 
 ifeq ($(PERFORMANCE),1)
-        OPTFLAGS = -O3 -march=k8-sse3 -g -mtune=k8-sse3
+        OPTFLAGS = -O3 -march=x86-64 -g -mtune=x86-64
         CXXFLAGS += -DNDEBUG
         # Enable link-time optimization:
         CXXFLAGS += -flto -fuse-linker-plugin

@@ -155,7 +155,7 @@ license_management:
     paths: [gl-license-management-report.json]
 
 
-.ubuntu:xenial:
+ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -173,7 +173,7 @@ license_management:
     - build:linux
 
 
-.ubuntu:bionic:
+ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2

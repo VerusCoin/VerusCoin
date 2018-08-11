@@ -3,6 +3,8 @@ VerusCoin is a new, mineable and stakeable cryptocurrency. It is a live fork of 
 - [VerusCoin web site https://veruscoin.io/ Wallets and CLI tools](https://veruscoin.io/)
 - [VerusCoin Explorer](https://explorer.veruscoin.io/)
 
+Version 0.3.12-beta has portable mining working.
+
 ## Komodo with Bitcore
 This version of Komodo contains Bitcore support for komodo and all its assetchains.
 

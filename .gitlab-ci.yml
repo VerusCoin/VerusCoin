@@ -1,7 +1,9 @@
 stages:
   - build
   - test
+  - package
   - deploy
+
 
 variables:
   VERSION: 0.3.12
@@ -12,7 +14,8 @@ variables:
   VERUS_CLI_LINUX_PORTABLE: verus-cli-linux-v$VERSION-beta.tar.gz
   VERUS_CLI_WINDOWS_PORTABLE: verus-cli-windows-v$VERSION-beta.zip
   VERUS_CLI_MACOS_PORTABLE: verus-cli-mac-v$VERSION-beta.tar.gz
-
+  EASYDEX_GUI_ARTIFACT: build.tar.gz
+  WINDOWS_INSTALLER: VerusCoin-v$VERSION-beta-windows-installer.exe
 
 build:linux:
   image: asherd/veruscoin-cross-compiler:linux
@@ -227,6 +230,29 @@ windows:10:
   dependencies:
     - build:windows
 
+package:
+  stage: package
+  image: asherd/agama-builder
+  variables:
+    DOCKER_DRIVER: overlay2
+  dependencies:
+    - build:windows
+  before_script:
+  - unzip $VERUS_CLI_WINDOWS_PORTABLE
+  - echo "$AUTH_KEY" > AUTH_KEY.json
+  - gcloud auth activate-service-account --key-file AUTH_KEY.json
+  - rm AUTH_KEY.json
+  - gsutil cp $STAGING/Agama/installer-prototype/Windows/Agama-win32-x64-v${VERSION}-beta.zip .
+  - unzip Agama-win32-x64-v${VERSION}-beta.zip
+  - git clone https://github.com/VerusCoin/Media-Assets  --single-branch -b master
+  - mkdir -p assets/imgs/
+  - cp Media-Assets/Logos/PNG/*  assets/imgs/
+  script:
+  - builder build zcutil/VerusCoin.xml windows --setvars project.version=$VERSION-beta
+  - mv builds/$WINDOWS_INSTALLER .
+  artifacts:
+    paths: [$WINDOWS_INSTALLER]
+
 
 deploy:
   stage: deploy
@@ -237,11 +263,12 @@ deploy:
     - build:linux
     - build:windows
     - build:mac
+    - package
   script:
     - mkdir -p $CI_COMMIT_REF_NAME/Windows
     - mkdir -p $CI_COMMIT_REF_NAME/Linux
     - mkdir -p $CI_COMMIT_REF_NAME/MacOS
-    - mv $VERUS_CLI_WINDOWS_PORTABLE $AGAMA_ARTIFACTS_WINDOWS $CI_COMMIT_REF_NAME/Windows
+    - mv $VERUS_CLI_WINDOWS_PORTABLE $AGAMA_ARTIFACTS_WINDOWS $WINDOWS_INSTALLER $CI_COMMIT_REF_NAME/Windows
     - mv $VERUS_CLI_LINUX_PORTABLE $AGAMA_ARTIFACTS_LINUX $CI_COMMIT_REF_NAME/Linux
     - mv $VERUS_CLI_MACOS_PORTABLE $AGAMA_ARTIFACTS_MACOS  $CI_COMMIT_REF_NAME/MacOS
     - echo "$AUTH_KEY" > AUTH_KEY.json

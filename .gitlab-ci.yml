@@ -246,6 +246,9 @@ deploy:
   - mkdir Windows
   - mkdir Linux
   - mkdir MacOS
+  - curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL -H $SLACK_BOT_AUTH https://slack.com/api/file 
+  - curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL -H $SLACK_BOT_AUTH https://slack.com/api/file
+  - curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL -H $SLACK_BOT_AUTH https://slack.com/api/file
   - mv $VERUS_CLI_WINDOWS $AGAMA_ARTIFACTS_WINDOWS Windows
   - mv $VERUS_CLI_LINUX $AGAMA_ARTIFACTS_LINUX Linux
   - mv $VERUS_CLI_MACOS $AGAMA_ARTIFACTS_MACOS MacOS

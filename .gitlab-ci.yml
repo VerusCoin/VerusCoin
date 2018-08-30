@@ -89,7 +89,7 @@ build:mac:
     expire_in: 1 week
 
 
-code_quality:
+.code_quality:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -107,7 +107,7 @@ code_quality:
     paths: [gl-code-quality-report.json]
 
 
-sast:
+.sast:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -126,7 +126,7 @@ sast:
 
 
 
-license_management:
+.license_management:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -142,7 +142,7 @@ license_management:
     paths: [gl-license-management-report.json]
 
 
-ubuntu:xenial:
+.ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -167,7 +167,7 @@ ubuntu:xenial:
   - build:linux
 
 
-ubuntu:bionic:
+.ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2
@@ -247,9 +247,9 @@ deploy:
   - mkdir Windows
   - mkdir Linux
   - mkdir MacOS
-  - '"curl -F file=@${VERUS_CLI_LINUX}-F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH} https://slack.com/api/files.upload"'
-  - '"curl -F file=@${VERUS_CLI_MACOS} -F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH} https://slack.com/api/files.upload"'
-  - '"curl -F file=@${VERUS_CLI_WINDOWS} -F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH} https://slack.com/api/files.upload"'
+  - 'curl -F file=@"${VERUS_CLI_LINUX}-F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
+  - 'curl -F file=@"${VERUS_CLI_MACOS} -F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
+  - 'curl -F file=@"${VERUS_CLI_WINDOWS} -F channels=${CLI_POST_CHANNEL} -F initial_comment=${POST_COMMENT} -H ${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
   - mv $VERUS_CLI_WINDOWS Windows
   - mv $VERUS_CLI_LINUX Linux
   - mv $VERUS_CLI_MACOS MacOS

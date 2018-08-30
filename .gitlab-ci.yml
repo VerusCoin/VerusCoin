@@ -139,7 +139,7 @@ variables:
 
 
 
-license_management:
+.license_management:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2

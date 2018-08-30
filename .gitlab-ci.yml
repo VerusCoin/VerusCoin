@@ -22,10 +22,10 @@ variables:
   - zcutil/build.sh -j4
   - cp src/komodod src/komodo-cli kmd/linux/verus-cli
   - chmod +x kmd/linux/verus-cli/komodod
-  - chmod +x kmd/linux/verus-cli/komodo-cli
-  - chmod +x kmd/linux/verus-cli/verus
-  - chmod +x kmd/linux/verus-cli/verusd
-  - chmod +x kmd/linux/verus-cli/fetch-params
+      kmd/linux/verus-cli/komodo-cli
+      kmd/linux/verus-cli/verus
+      kmd/linux/verus-cli/verusd
+      kmd/linux/verus-cli/fetch-params
   - dos2unix kmd/linux/verus-cli/README.txt
   - tar -C kmd/linux/ -czvf $VERUS_CLI_LINUX verus-cli ./
   after_script:
@@ -253,10 +253,15 @@ deploy:
   #- mv $VERUS_CLI_LINUX Linux
   #- mv $VERUS_CLI_MACOS MacOS
   - echo "$AUTH_KEY" > AUTH_KEY.json
-  - gcloud auth activate-service-account --key-file AUTH_KEY.json
+  - gcloud auth activate-service-account
+      --key-file AUTH_KEY.json
   #- gsutil cp -r Windows Linux MacOS $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
   - gsutil cp $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/Linux/$VERUS_CLI_LINUX .
   - gsutil cp $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/Linux/$VERUS_CLI_LINUX .
-  - "curl -H '${SLACK_BOT_AUTH}' -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL -F initial_comment='${POST_COMMENT}' https://slack.com/api/files.upload"
+  - curl -F file=@"$VERUS_CLI_LINUX"
+      -F channels="$CLI_POST_CHANNEL"
+      -F initial_comment="${POST_COMMENT}"
+      -H "${SLACK_BOT_AUTH}"
+      "https://slack.com/api/files.upload"
   #- curl -X POST -F token=$CI_JOB_TOKEN -F ref=master -F variables\[CLI_VERSION\]=$VERSION -F variables\[AGAMA_VERSION\]=$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
 

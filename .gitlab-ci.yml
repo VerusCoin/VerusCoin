@@ -149,10 +149,17 @@ ubuntu:xenial:
   stage: test
   before_script:
   - apt update && apt install -y wget g++-multilib libcurl3 python
+  - rm -rf /root/.komodo || true
+  - mv .komodo /root/ || true
   script:
   - tar -xzvf $VERUS_CLI_LINUX
   - export PATH=$PATH:$CI_PROJECT_DIR/verus-cli
   - python qa/verus-cli-tests/verus-cli-tester.py
+  after_script:
+  - mv /root/.komodo ./ || true
+  cache:
+    key: ${CI_JOB_NAME}
+    paths: [.komodo]
   artifacts:
     paths: [log.txt]
     expire_in: 1 week
@@ -167,10 +174,17 @@ ubuntu:bionic:
   stage: test
   before_script:
   - apt update && apt install -y wget g++-multilib libcurl3 python
+  - rm -rf /root/.komodo || true
+  - mv .komodo /root/ || true
   script:
   - tar -xzvf $VERUS_CLI_LINUX
   - export PATH=$PATH:$CI_PROJECT_DIR/verus-cli
   - python qa/verus-cli-tests/verus-cli-tester.py
+  after_script:
+  - mv /root/.komodo ./ || true
+  cache:
+    key: ${CI_JOB_NAME}
+    paths: [.komodo]
   artifacts:
     paths: [log.txt]
     expire_in: 1 week
@@ -233,9 +247,9 @@ deploy:
   - mkdir Windows
   - mkdir Linux
   - mkdir MacOS
-  - 'curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
-  - 'curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
-  - 'curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
+  - curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload
+  - curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload
+  - curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload
   - mv $VERUS_CLI_WINDOWS Windows
   - mv $VERUS_CLI_LINUX Linux
   - mv $VERUS_CLI_MACOS MacOS

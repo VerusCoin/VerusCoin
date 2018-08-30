@@ -247,9 +247,9 @@ deploy:
   - mkdir Windows
   - mkdir Linux
   - mkdir MacOS
-  - 'curl -F file=@"${VERUS_CLI_LINUX}" -F channels="${CLI_POST_CHANNEL}" -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
-  - 'curl -F file=@"${VERUS_CLI_MACOS}" -F channels="${CLI_POST_CHANNEL}" -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
-  - 'curl -F file=@"${VERUS_CLI_WINDOWS}" -F channels="${CLI_POST_CHANNEL}" -F initial_comment="${POST_COMMENT}" -H "${SLACK_BOT_AUTH}" https://slack.com/api/files.upload'
+  - 'curl -F file=@\"${VERUS_CLI_LINUX}\" -F channels=\"${CLI_POST_CHANNEL}\" -F initial_comment=\"${POST_COMMENT}\" -H \"${SLACK_BOT_AUTH}\" https://slack.com/api/files.upload'
+  - 'curl -F file=@\"${VERUS_CLI_MACOS}\" -F channels=\"${CLI_POST_CHANNEL}\" -F initial_comment=\"${POST_COMMENT}\" -H \"${SLACK_BOT_AUTH}\" https://slack.com/api/files.upload'
+  - 'curl -F file=@\"${VERUS_CLI_WINDOWS}\" -F channels=\"${CLI_POST_CHANNEL}\" -F initial_comment=\"${POST_COMMENT}\" -H \"${SLACK_BOT_AUTH}\" https://slack.com/api/files.upload'
   - mv $VERUS_CLI_WINDOWS Windows
   - mv $VERUS_CLI_LINUX Linux
   - mv $VERUS_CLI_MACOS MacOS

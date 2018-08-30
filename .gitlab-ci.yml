@@ -102,7 +102,7 @@ build:mac:
     expire_in: 1 week
 
 
-.code_quality:
+code_quality:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -120,7 +120,7 @@ build:mac:
     paths: [gl-code-quality-report.json]
 
 
-.sast:
+sast:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -139,7 +139,7 @@ build:mac:
 
 
 
-.license_management:
+license_management:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -155,7 +155,7 @@ build:mac:
     paths: [gl-license-management-report.json]
 
 
-.ubuntu:xenial:
+ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -173,7 +173,7 @@ build:mac:
   - build:linux
 
 
-.ubuntu:bionic:
+ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2
@@ -255,6 +255,6 @@ deploy:
   - echo "$AUTH_KEY" > AUTH_KEY.json
   - gcloud auth activate-service-account --key-file AUTH_KEY.json
   - gsutil cp -r Windows Linux MacOS $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
-  - curl -X POST -F token=$CI_JOB_TOKEN --form ref=$CI_COMMIT_REF_NAME --form "variables\[CLI_VERSION\]="$VERSION --form "variables\[AGAMA_VERSION\]="$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
+  - curl -X POST -F token=$CI_JOB_TOKEN --form ref=master --form "variables\[CLI_VERSION\]="$VERSION --form "variables\[AGAMA_VERSION\]="$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
 
 

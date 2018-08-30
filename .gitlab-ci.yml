@@ -11,7 +11,7 @@ variables:
   VERUS_CLI_LINUX: verus-cli-linux-v$VERSION-beta.tar.gz
   VERUS_CLI_WINDOWS: verus-cli-windows-v$VERSION-beta.zip
   VERUS_CLI_MACOS: verus-cli-mac-v$VERSION-beta.tar.gz
-  POST_COMMENT: Branch:\ $CI_COMMIT_REF_NAME Commit:\ $CI_COMMIT_SHA
+  POST_COMMENT: "Branch: $CI_COMMIT_REF_NAME Commit: $CI_COMMIT_SHA"
 
 build:linux:
   image: asherd/veruscoin-cross-compiler:linux
@@ -256,5 +256,4 @@ deploy:
   - gcloud auth activate-service-account --key-file AUTH_KEY.json
   - gsutil cp -r Windows Linux MacOS $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
   - curl -X POST -F token=$CI_JOB_TOKEN -F ref=master -F variables\[CLI_VERSION\]=$VERSION -F variables\[AGAMA_VERSION\]=$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
-
 

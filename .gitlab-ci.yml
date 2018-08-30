@@ -248,7 +248,7 @@ deploy:
   - mkdir MacOS
   - 'curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL -F initial_comment=$POST_COMMENT -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
   - 'curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL -F initial_comment=$POST_COMMENT -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
-  - 'curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL -F initial_comment=$POST_COMMENT Commit: $CI_COMMIT_SHA" -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
+  - 'curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL -F initial_comment=$POST_COMMENT -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
   - mv $VERUS_CLI_WINDOWS $AGAMA_ARTIFACTS_WINDOWS Windows
   - mv $VERUS_CLI_LINUX $AGAMA_ARTIFACTS_LINUX Linux
   - mv $VERUS_CLI_MACOS $AGAMA_ARTIFACTS_MACOS MacOS

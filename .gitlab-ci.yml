@@ -1,6 +1,6 @@
 stages:
-- build
-- test
+#- build
+#- test
 - deploy
 
 variables:
@@ -13,7 +13,7 @@ variables:
   VERUS_CLI_MACOS: verus-cli-mac-v$VERSION-beta.tar.gz
 
 
-build:linux:
+.build:linux:
   image: asherd/veruscoin-cross-compiler:linux
   variables:
     DOCKER_DRIVER: overlay2
@@ -47,7 +47,7 @@ build:linux:
     expire_in: 1 week
 
 
-build:windows:
+.build:windows:
   image: asherd/veruscoin-cross-compiler:latest
   variables:
     DOCKER_DRIVER: overlay2
@@ -80,7 +80,7 @@ build:windows:
     expire_in: 1 week
 
 
-build:mac:
+.build:mac:
   stage: build
   tags: ["High Sierra"]
   cache:
@@ -102,7 +102,7 @@ build:mac:
     expire_in: 1 week
 
 
-code_quality:
+.code_quality:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -120,7 +120,7 @@ code_quality:
     paths: [gl-code-quality-report.json]
 
 
-sast:
+.sast:
   image: docker:stable
   variables:
     DOCKER_DRIVER: overlay2
@@ -155,7 +155,7 @@ license_management:
     paths: [gl-license-management-report.json]
 
 
-ubuntu:xenial:
+.ubuntu:xenial:
   image: ubuntu:xenial
   variables:
     DOCKER_DRIVER: overlay2
@@ -173,7 +173,7 @@ ubuntu:xenial:
   - build:linux
 
 
-ubuntu:bionic:
+.ubuntu:bionic:
   image: ubuntu:bionic
   variables:
     DOCKER_DRIVER: overlay2
@@ -238,23 +238,23 @@ deploy:
   image: google/cloud-sdk:alpine
   variables:
     DOCKER_DRIVER: overlay2
-  dependencies:
-  - build:linux
-  - build:windows
-  - build:mac
+  #dependencies:
+  #- build:linux
+  #- build:windows
+  #- build:mac
   script:
   - mkdir Windows
   - mkdir Linux
   - mkdir MacOS
-  - 'curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
-  - 'curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
-  - 'curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
-  - mv $VERUS_CLI_WINDOWS $AGAMA_ARTIFACTS_WINDOWS Windows
-  - mv $VERUS_CLI_LINUX $AGAMA_ARTIFACTS_LINUX Linux
-  - mv $VERUS_CLI_MACOS $AGAMA_ARTIFACTS_MACOS MacOS
-  - echo "$AUTH_KEY" > AUTH_KEY.json
-  - gcloud auth activate-service-account --key-file AUTH_KEY.json
-  - gsutil cp -r Windows Linux MacOS $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
-  - curl -X POST -F token=$CI_JOB_TOKEN --form ref=master --form "variables\[CLI_VERSION\]="$VERSION --form "variables\[AGAMA_VERSION\]="$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
+  #- 'curl -F file=@$VERUS_CLI_LINUX -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
+  #- 'curl -F file=@$VERUS_CLI_MACOS -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
+  #- 'curl -F file=@$VERUS_CLI_WINDOWS -F channels=$CLI_POST_CHANNEL initial_comment="Branch: "$CI_COMMIT_REF_NAME" Commit: "$CI_COMMIT_SHA -H "Authorization: Bearer "$SLACK_BOT_AUTH https://slack.com/api/files.upload'
+  #- mv $VERUS_CLI_WINDOWS $AGAMA_ARTIFACTS_WINDOWS Windows
+  #- mv $VERUS_CLI_LINUX $AGAMA_ARTIFACTS_LINUX Linux
+  #- mv $VERUS_CLI_MACOS $AGAMA_ARTIFACTS_MACOS MacOS
+  #- echo "$AUTH_KEY" > AUTH_KEY.json
+  #- gcloud auth activate-service-account --key-file AUTH_KEY.json
+  #- gsutil cp -r Windows Linux MacOS $STAGING/VerusCoin/$CI_COMMIT_REF_NAME/
+  - curl -X POST -F token=$CI_JOB_TOKEN --form ref=master --form variables\[CLI_VERSION\]=$VERSION --form variables\[AGAMA_VERSION\]=$VERSION https://gitlab.com/api/v4/projects/8018638/trigger/pipeline
 
 

@@ -28,8 +28,6 @@ build:linux:
   - chmod +x kmd/linux/verus-cli/fetch-params
   - dos2unix kmd/linux/verus-cli/README.txt
   - tar -C kmd/linux/ -czvf $VERUS_CLI_LINUX verus-cli ./
-  - mv kmd/linux/verus-cli kmd/linux/linux64
-  - tar -C kmd/linux/ -czvf $AGAMA_ARTIFACTS_LINUX linux64 ./
   after_script:
   - mv /root/.ccache ./ || true
   cache:
@@ -66,9 +64,6 @@ build:windows:
   - cd kmd/windows/
   - zip -r $VERUS_CLI_WINDOWS verus-cli
   - mv $VERUS_CLI_WINDOWS ../..
-  - mv verus-cli win64
-  - zip -r $AGAMA_ARTIFACTS_WINDOWS win64
-  - mv $AGAMA_ARTIFACTS_WINDOWS ../..
   artifacts:
     paths:
     - $VERUS_CLI_WINDOWS
@@ -88,8 +83,6 @@ build:mac:
   - ./makeReleaseMac.sh -j6
   - dos2unix kmd/mac/verus-cli/README.txt
   - tar -C kmd/mac/ -czvf $VERUS_CLI_MACOS verus-cli ./
-  - mv kmd/mac/verus-cli kmd/mac/osx
-  - tar -C kmd/mac/ -czvf $AGAMA_ARTIFACTS_MACOS osx ./
   artifacts:
     paths:
     - $VERUS_CLI_MACOS

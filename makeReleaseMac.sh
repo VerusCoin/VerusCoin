@@ -22,7 +22,7 @@ do
     for dylib in ${DYLIBS}; do cp -rf ${dylib} ${KMD_DIR}; done
 done
 
-libraries=("libgcc_s.1.dylib" "libgomp.1.dylib" "libidn2.0.dylib" "libstdc++.6.dylib")
+libraries=`otool -L ${KMD_DIR}/${binary} | grep "${KMD_DIR}" | awk -F' ' '{ print $1 }'`
 
 for binary in "${libraries[@]}";
 do

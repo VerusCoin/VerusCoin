@@ -4,10 +4,14 @@ KMD_DIR=verus-cli
 mkdir ${KMD_DIR}
 cp src/verus \
    src/verusd \
-   doc/man/verus-cli/macos/README.txt \
+   doc/man/verus-cli/mac/README.txt \
    zcutil/fetch-params.sh \
    verus-cli
 mv verus-cli/fetch-params.sh verus-cli/fetch-params
+
+chmod +x ${KMD_DIR}/fetch-params
+chmod +x ${KMD_DIR}/verus
+chmod +x ${KMD_DIR}/verusd
 
 binaries=("komodo-cli" "komodod")
 alllibs=()
@@ -22,12 +26,10 @@ do
     for dylib in ${DYLIBS}; do cp -rf ${dylib} ${KMD_DIR}; done
 done
 
-libraries=`otool -L ${KMD_DIR}/${binary} | grep "${KMD_DIR}" | awk -F' ' '{ print $1 }'`
+libraries=("libgcc_s.1.dylib" "libgomp.1.dylib" "libidn2.0.dylib" "libstdc++.6.dylib")
 
 for binary in "${libraries[@]}";
 do
-    # Need to undo this for the dylibs when we are done
-    chmod 755 ${KMD_DIR}/${binary}
     # find the dylibs to copy for komodod
     DYLIBS=`otool -L ${KMD_DIR}/${binary} | grep "/usr/local" | awk -F' ' '{ print $1 }'`
     echo "copying ${DYLIBS} to ${KMD_DIR}"
@@ -69,11 +71,6 @@ do
         echo "Next lib is ${dylib} "
         install_name_tool -change ${dylib} @executable_path/`basename ${dylib}` ${KMD_DIR}/${binary}
     done
-    chmod +x ${KMD_DIR}/${binary}
 done
-
-chmod +x ${KMD_DIR}/fetch-params
-chmod +x ${KMD_DIR}/verus
-chmod +x ${KMD_DIR}/verusd
 
 

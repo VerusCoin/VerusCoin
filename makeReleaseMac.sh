@@ -2,13 +2,13 @@
 
 KMD_DIR=verus-cli
 mkdir ${KMD_DIR}
+
 cp src/verus \
    src/verusd \
    doc/man/verus-cli/mac/README.txt \
    zcutil/fetch-params.sh \
    verus-cli
 mv verus-cli/fetch-params.sh verus-cli/fetch-params
-
 chmod +x ${KMD_DIR}/fetch-params
 chmod +x ${KMD_DIR}/verus
 chmod +x ${KMD_DIR}/verusd

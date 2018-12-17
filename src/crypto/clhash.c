@@ -114,7 +114,7 @@ enum {CLHASH_DEBUG=0};
 // For use with CLHASH
 // we expect length to have value 128 or, at least, to be divisible by 4.
 static __m128i __clmulhalfscalarproductwithoutreduction(const __m128i * randomsource, const uint64_t * string,
-        const size_t length) {
+        const uint64_t length) {
     assert(((uintptr_t) randomsource & 15) == 0);// we expect cache line alignment for the keys
     // we expect length = 128, so we need  16 cache lines of keys and 16 cache lines of strings.
     if(CLHASH_DEBUG) assert((length & 3) == 0); // if not, we need special handling (omitted)
@@ -140,7 +140,7 @@ static __m128i __clmulhalfscalarproductwithoutreduction(const __m128i * randomso
 
 // the value length does not have to be divisible by 4
 static __m128i __clmulhalfscalarproductwithtailwithoutreduction(const __m128i * randomsource,
-        const uint64_t * string, const size_t length) {
+        const uint64_t * string, const uint64_t length) {
     assert(((uintptr_t) randomsource & 15) == 0);// we expect cache line alignment for the keys
     const uint64_t * const endstring = string + length;
     __m128i acc = _mm_setzero_si128();
@@ -181,7 +181,7 @@ static __m128i __clmulhalfscalarproductwithtailwithoutreduction(const __m128i * 
 
 // the value length does not have to be divisible by 4
 static __m128i __clmulhalfscalarproductwithtailwithoutreductionWithExtraWord(const __m128i * randomsource,
-        const uint64_t * string, const size_t length, const uint64_t extraword) {
+        const uint64_t * string, const uint64_t length, const uint64_t extraword) {
     assert(((uintptr_t) randomsource & 15) == 0);// we expect cache line alignment for the keys
     const uint64_t * const endstring = string + length;
     __m128i acc = _mm_setzero_si128();
@@ -274,7 +274,7 @@ inline uint64_t fmix64 ( uint64_t k ) {
 
 // there always remain an incomplete word that has 1,2, 3, 4, 5, 6, 7 used bytes.
 // we append 0s to it
-static inline uint64_t createLastWord(const size_t lengthbyte, const uint64_t * lastw) {
+static inline uint64_t createLastWord(const uint64_t lengthbyte, const uint64_t * lastw) {
     const int significantbytes = lengthbyte % sizeof(uint64_t);
     uint64_t lastword = 0;
     memcpy(&lastword,lastw,significantbytes); // could possibly be faster?
@@ -283,7 +283,7 @@ static inline uint64_t createLastWord(const size_t lengthbyte, const uint64_t * 
 
 
 uint64_t clhash(const void* random, const char * stringbyte,
-                const size_t lengthbyte) {
+                const uint64_t lengthbyte) {
     assert(sizeof(size_t)<=sizeof(uint64_t));// otherwise, we need to worry
     assert(((uintptr_t) random & 15) == 0);// we expect cache line alignment for the keys
     const unsigned int  m = 128;// we process the data in chunks of 16 cache lines
@@ -293,13 +293,13 @@ uint64_t clhash(const void* random, const char * stringbyte,
     __m128i polyvalue =  _mm_load_si128(rs64 + m128neededperblock); // to preserve alignment on cache lines for main loop, we pick random bits at the end
     polyvalue = _mm_and_si128(polyvalue,_mm_setr_epi32(0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0x3fffffff));// setting two highest bits to zero
     // we should check that polyvalue is non-zero, though this is best done outside the function and highly unlikely
-    const size_t length = lengthbyte / sizeof(uint64_t); // # of complete words
-    const size_t lengthinc = (lengthbyte + sizeof(uint64_t) - 1) / sizeof(uint64_t); // # of words, including partial ones
+    const uint64_t length = lengthbyte / sizeof(uint64_t); // # of complete words
+    const uint64_t lengthinc = (lengthbyte + sizeof(uint64_t) - 1) / sizeof(uint64_t); // # of words, including partial ones
 
     const uint64_t * string = (const uint64_t *)  stringbyte;
     if (m < lengthinc) { // long strings // modified from length to lengthinc to address issue #3 raised by Eik List
         __m128i  acc =  __clmulhalfscalarproductwithoutreduction(rs64, string,m);
-        size_t t = m;
+        uint64_t t = m;
         for (; t +  m <= length; t +=  m) {
             // we compute something like
             // acc+= polyvalue * acc + h1

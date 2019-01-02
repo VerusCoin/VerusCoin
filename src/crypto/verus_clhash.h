@@ -78,8 +78,8 @@ struct thread_specific_ptr {
 #ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
     ~thread_specific_ptr();
 #else
-    printf("~thread_specific_ptr()\n");
     ~thread_specific_ptr() {
+        printf("~thread_specific_ptr()\n");
         this->reset();
     }
 #endif

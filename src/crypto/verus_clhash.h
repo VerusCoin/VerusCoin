@@ -75,9 +75,10 @@ struct thread_specific_ptr {
         ptr = newptr;
     }
     void *get() { return ptr; }
-#if defined(_WIN32) || defined(__APPLE__) // horrible MingW and gcc thread local storage bug workaround
+#ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
     ~thread_specific_ptr();
 #else
+    printf("~thread_specific_ptr()\n")
     ~thread_specific_ptr() {
         this->reset();
     }

@@ -81,6 +81,8 @@ struct thread_specific_ptr {
     ~thread_specific_ptr() {
         printf("~thread_specific_ptr()\n");
         this->reset();
+        printf("after reset\n");
+
     }
 #endif
 };

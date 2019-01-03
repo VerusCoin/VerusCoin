@@ -74,7 +74,10 @@ struct thread_specific_ptr {
             std::free(ptr);
             printf("after std::free(ptr);\n");
         }
+        printf("before new ptr);\n");
         ptr = newptr;
+        printf("after new ptr);\n");
+
     }
     void *get() { return ptr; }
 #ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
@@ -83,7 +86,7 @@ struct thread_specific_ptr {
     ~thread_specific_ptr() {
         printf("~thread_specific_ptr()\n");
         printf("%p\n",this->ptr);
-        printf("%d\n",this->*ptr);
+        printf("%d\n",this->ptr);
         this->reset();
         printf("after reset\n");
 

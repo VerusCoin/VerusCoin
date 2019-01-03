@@ -81,7 +81,9 @@ struct thread_specific_ptr {
     ~thread_specific_ptr() {
         printf("~thread_specific_ptr()\n");
         printf("%p\n", this->get());
+        printf("%d\n", this->get());
         printf("%p\n",this->ptr);
+        printf("%d\n",this->ptr);
         this->reset();
         printf("after reset\n");
 
@@ -172,7 +174,9 @@ struct verusclhasher {
     verusclhasher(uint64_t keysize=VERUSKEYSIZE) : keySizeInBytes((keysize >> 5) << 5)
     {
 #ifdef __APPLE__
+        printf("Before tls init");
         __tls_init();
+        printf("After tls init");
 #endif
         if (IsCPUVerusOptimized())
         {

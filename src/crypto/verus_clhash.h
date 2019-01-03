@@ -70,7 +70,9 @@ struct thread_specific_ptr {
     {
         if (ptr && ptr != newptr)
         {
+            printf("before std::free(ptr);\n");
             std::free(ptr);
+            printf("after std::free(ptr);\n");
         }
         ptr = newptr;
     }
@@ -80,10 +82,8 @@ struct thread_specific_ptr {
 #else
     ~thread_specific_ptr() {
         printf("~thread_specific_ptr()\n");
-        printf("%p\n", this->get());
-        printf("%d\n", this->*get());
         printf("%p\n",this->ptr);
-        printf("%d\n",this-*>ptr);
+        printf("%d\n",this->*ptr);
         this->reset();
         printf("after reset\n");
 

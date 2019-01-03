@@ -80,8 +80,8 @@ struct thread_specific_ptr {
 #else
     ~thread_specific_ptr() {
         printf("~thread_specific_ptr()\n");
-        printf(% , this->get())
-        printf(% ,this->ptr)
+        printf("%p\n", this->get())
+        printf("%p\n",this->ptr)
         this->reset();
         printf("after reset\n");
 

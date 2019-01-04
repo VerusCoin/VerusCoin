@@ -194,7 +194,7 @@ struct verusclhasher {
             (verusclhasher_key.reset((unsigned char *)alloc_aligned_buffer(keySizeInBytes << 1)), key = verusclhasher_key.get()))
         {
             verusclhash_descr *pdesc;
-            if (verusclhasher_descr.reset(std::malloc(sizeof(verusclhash_descr))), pdesc = (verusclhash_descr *)verusclhasher_descr.get())
+            if (verusclhasher_descr.reset(new verusclhash_descr()), pdesc = (verusclhash_descr *)verusclhasher_descr.get())
             {
                 pdesc->keySizeInBytes = keySizeInBytes;
             }

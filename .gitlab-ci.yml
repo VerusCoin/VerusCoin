@@ -26,7 +26,7 @@ variables:
 ####START####                                            LINUX                                             ####START####
 ########################################################################################################################
 build:linux:
-  image: asherd/verus-builders:verus-centos
+  image: asherd/verus-builders:verus-ubuntu
   variables:
     DOCKER_DRIVER: overlay2
   stage: build

@@ -77,7 +77,7 @@ uint32_t ASSETCHAINS_VERUSHASH = 1;
 const char *ASSETCHAINS_ALGORITHMS[] = {"equihash", "verushash"};
 uint64_t ASSETCHAINS_NONCEMASK[] = {0xffff,0xfffffff};
 uint32_t ASSETCHAINS_NONCESHIFT[] = {32,16};
-uint32_t ASSETCHAINS_HASHESPERROUND[] = {1,4096};
+uint32_t ASSETCHAINS_HASHESPERROUND[] = {1,0x10000};
 uint32_t ASSETCHAINS_ALGO = _ASSETCHAINS_EQUIHASH;
 
 // Verus proof of stake controls

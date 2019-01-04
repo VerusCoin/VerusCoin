@@ -1186,6 +1186,10 @@ void static VerusStaker(CWallet *pwallet)
     }
 }
 
+typedef bool (*minefunction)(CBlockHeader &bh, CVerusHashV2bWriter &vhw, uint256 &finalHash, uint256 &target, uint64_t start, uint64_t *count);
+bool mine_verus_v2(CBlockHeader &bh, CVerusHashV2bWriter &vhw, uint256 &finalHash, uint256 &target, uint64_t start, uint64_t *count);
+bool mine_verus_v2_port(CBlockHeader &bh, CVerusHashV2bWriter &vhw, uint256 &finalHash, uint256 &target, uint64_t start, uint64_t *count);
+
 void static BitcoinMiner_noeq(CWallet *pwallet)
 #else
 void static BitcoinMiner_noeq()
@@ -1232,9 +1236,6 @@ void static BitcoinMiner_noeq()
 
     try {
         printf("Mining %s with %s\n", ASSETCHAINS_SYMBOL, ASSETCHAINS_ALGORITHMS[ASSETCHAINS_ALGO]);
-
-        // v1 hash writer
-        CVerusHashWriter ss = CVerusHashWriter(SER_GETHASH, PROTOCOL_VERSION);
 
         // v2 hash writer
         CVerusHashV2bWriter ss2 = CVerusHashV2bWriter(SER_GETHASH, PROTOCOL_VERSION);
@@ -1321,8 +1322,7 @@ void static BitcoinMiner_noeq()
 
             savebits = pblock->nBits;
             arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
-            arith_uint256 mask(ASSETCHAINS_NONCEMASK[ASSETCHAINS_ALGO]);
-
+            uint256 uintTarget = ArithToUint256(hashTarget);
             Mining_start = 0;
 
             if ( pindexPrev != chainActive.LastTip() )
@@ -1345,96 +1345,56 @@ void static BitcoinMiner_noeq()
                 fprintf(stderr," PoW for staked coin PoS %d%% vs target %d%%\n",percPoS,(int32_t)ASSETCHAINS_STAKED);
             }
 
-            int64_t i, count, hashesToGo;
+            uint64_t i, count, hashesToGo;
             bool verusHashV2 = pblock->nVersion == CBlockHeader::VERUS_V2;
-
-            if (verusHashV2)
+            if (!verusHashV2)
             {
-                count = (ASSETCHAINS_NONCEMASK[ASSETCHAINS_ALGO] >> 3) + 1;
-            }
-            else
-            {
-                count = ASSETCHAINS_NONCEMASK[ASSETCHAINS_ALGO] + 1;
+                // must not be in sync
+                printf("Mining on incorrect block version.\n");
+                sleep(2);
+                continue;
             }
 
-            CVerusHash *vh = &ss.GetState();;
+            count = ((ASSETCHAINS_NONCEMASK[ASSETCHAINS_ALGO] >> 3) + 1) / ASSETCHAINS_HASHESPERROUND[ASSETCHAINS_ALGO];
             CVerusHashV2 *vh2 = &ss2.GetState();
             u128 *hashKey;
             verusclhasher &vclh = vh2->vclh;
+            minefunction mine_verus;
+            mine_verus = IsCPUVerusOptimized() ? &mine_verus_v2 : &mine_verus_v2_port;
 
             while (true)
             {
-                arith_uint256 arNonce = UintToArith256(pblock->nNonce);
-
-                int64_t *extraPtr;
                 uint256 hashResult = uint256();
-
-                hashesToGo = ASSETCHAINS_HASHESPERROUND[ASSETCHAINS_ALGO];
 
                 unsigned char *curBuf;
 
-                if (verusHashV2)
+                // check NONCEMASK at a time
+                for (uint64_t i = 0; i < count; i++)
                 {
-                    vh2->Reset();
-                    ss2 << *((CBlockHeader *)pblock);
-                    extraPtr = ss2.xI64p();
-                    curBuf = vh2->CurBuffer();
-                    hashKey = vh2->GenNewCLKey(curBuf);
-                }
-                else
-                {
-                    vh->Reset();
-                    ss << *((CBlockHeader *)pblock);
-                    extraPtr = ss.xI64p();
-                    vh->ClearExtra();
-                }
+                    hashesToGo = ASSETCHAINS_HASHESPERROUND[ASSETCHAINS_ALGO];
 
-                // for speed check NONCEMASK at a time
-                for (i = 0; i < count; i++)
-                {
-                    *extraPtr = i;
-
-                    uint64_t intermediate;
-
-                    if (verusHashV2)
+                    uint64_t start = i * hashesToGo;
+                    // hashesToGo gets updated with actual number run for metrics
+                    if (!(*mine_verus)(*pblock, ss2, hashResult, uintTarget, start, &hashesToGo))
                     {
-                        // prepare the buffer
-                        vh2->FillExtra((u128 *)curBuf);
-
-                        // refresh the key and get a reference
-                        memcpy(hashKey, vclh.gethasherrefresh(), vclh.keyrefreshsize());
-
-                        // run verusclhash on the buffer
-                        intermediate = vh2->vclh(curBuf, hashKey);
-
-                        // fill buffer to the end with the result and final hash
-                        vh2->FillExtra(&intermediate);
-                        vh2->ExtraHashKeyed((unsigned char *)&hashResult, hashKey + vh2->IntermediateTo128Offset(intermediate));
-                    }
-                    else
-                    {
-                        vh->ExtraHash((unsigned char *)&hashResult);
-                    }
-
-                    if ( UintToArith256(hashResult) > hashTarget )
-                    {
-                        // check periodically if we're stale
-                        if (--hashesToGo)
+                        // Check for stop or if block needs to be rebuilt
+                        boost::this_thread::interruption_point();
+                        if ( pindexPrev != chainActive.LastTip() )
                         {
-                            continue;
+                            if (lastChainTipPrinted != chainActive.LastTip())
+                            {
+                                lastChainTipPrinted = chainActive.LastTip();
+                                printf("Block %d added to chain\n", lastChainTipPrinted->GetHeight());
+                            }
+                            break;
                         }
                         else
                         {
-                            if ( pindexPrev != chainActive.LastTip() )
                             {
-                                if (lastChainTipPrinted != chainActive.LastTip())
-                                {
-                                    lastChainTipPrinted = chainActive.LastTip();
-                                    printf("Block %d added to chain\n", lastChainTipPrinted->GetHeight());
-                                }
-                                break;
+                                LOCK(cs_metrics);
+                                nHashCount += hashesToGo;
                             }
-                            hashesToGo = ASSETCHAINS_HASHESPERROUND[ASSETCHAINS_ALGO];
+                            continue;
                         }
                     }
                     else
@@ -1449,8 +1409,6 @@ void static BitcoinMiner_noeq()
                         }
 
                         SetThreadPriority(THREAD_PRIORITY_NORMAL);
-
-                        *((int64_t *)&(pblock->nSolution.data()[pblock->nSolution.size() - 15])) = i;
 
                         int32_t unlockTime = komodo_block_unlocktime(Mining_height);
                         int64_t subsidy = (int64_t)(pblock->vtx[0].vout[0].nValue);
@@ -1485,7 +1443,7 @@ void static BitcoinMiner_noeq()
 #ifdef ENABLE_WALLET
                         ProcessBlockFound(pblock, *pwallet, reservekey);
 #else
-                        ProcessBlockFound(pblock));
+                        ProcessBlockFound(pblock);
 #endif
                         SetThreadPriority(THREAD_PRIORITY_LOWEST);
                         break;
@@ -1494,7 +1452,7 @@ void static BitcoinMiner_noeq()
 
                 {
                     LOCK(cs_metrics);
-                    nHashCount += i;
+                    nHashCount += hashesToGo;
                 }
 
                 // Check for stop or if block needs to be rebuilt

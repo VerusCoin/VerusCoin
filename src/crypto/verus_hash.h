@@ -95,7 +95,7 @@ class CVerusHashV2
 
         CVerusHashV2 &Write(const unsigned char *data, size_t len);
 
-        CVerusHashV2 &Reset()
+        inline CVerusHashV2 &Reset()
         {
             curBuf = buf1;
             result = buf2;
@@ -114,7 +114,7 @@ class CVerusHashV2
         }
 
         template <typename T>
-        void FillExtra(const T *_data)
+        inline void FillExtra(const T *_data)
         {
             unsigned char *data = (unsigned char *)_data;
             int pos = curPos;
@@ -142,17 +142,19 @@ class CVerusHashV2
         }
 
         // chains Haraka256 from 32 bytes to fill the key
-        u128 *GenNewCLKey(unsigned char *seedBytes32)
+        static u128 *GenNewCLKey(unsigned char *seedBytes32)
         {
             unsigned char *key = (unsigned char *)verusclhasher_key.get();
             verusclhash_descr *pdesc = (verusclhash_descr *)verusclhasher_descr.get();
+            int size = pdesc->keySizeInBytes;
+            int refreshsize = verusclhasher::keymask(size) + 1;
             // skip keygen if it is the current key
             if (pdesc->seed != *((uint256 *)seedBytes32))
             {
                 // generate a new key by chain hashing with Haraka256 from the last curbuf
-                int n256blks = pdesc->keySizeInBytes >> 5;
-                int nbytesExtra = pdesc->keySizeInBytes & 0x1f;
-                unsigned char *pkey = key + pdesc->keySizeInBytes;
+                int n256blks = size >> 5;
+                int nbytesExtra = size & 0x1f;
+                unsigned char *pkey = key;
                 unsigned char *psrc = seedBytes32;
                 for (int i = 0; i < n256blks; i++)
                 {
@@ -167,14 +169,14 @@ class CVerusHashV2
                     memcpy(pkey, buf, nbytesExtra);
                 }
                 pdesc->seed = *((uint256 *)seedBytes32);
+                memcpy(key + size, key, refreshsize);
             }
-            memcpy(key, key + pdesc->keySizeInBytes, pdesc->keySizeInBytes);
+            else
+            {
+                memcpy(key, key + size, refreshsize);
+            }
 
-#ifdef VERUSHASHDEBUG
-            uint256 *bhalf1 = (uint256 *)key;
-            uint256 *bhalf2 = bhalf1 + ((vclh.keyMask + 1) >> 5);
-            printf("New key: %s%s\n", bhalf1->GetHex().c_str(), bhalf2->GetHex().c_str());
-#endif
+            memset((unsigned char *)key + (size + refreshsize), 0, size - refreshsize);
             return (u128 *)key;
         }
 
@@ -241,7 +243,7 @@ class CVerusHashV2
 
     private:
         // only buf1, the first source, needs to be zero initialized
-        alignas(16) unsigned char buf1[64] = {0}, buf2[64];
+        alignas(32) unsigned char buf1[64] = {0}, buf2[64];
         unsigned char *curBuf = buf1, *result = buf2;
         size_t curPos = 0;
 };

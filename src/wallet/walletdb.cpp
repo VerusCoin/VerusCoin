@@ -469,7 +469,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CValidationState state;
             auto verifier = libzcash::ProofVerifier::Strict();
             if (!(CheckTransaction(wtx, state, verifier) && (wtx.GetHash() == hash) && state.IsValid()))
+            {
+                if (wtx.hashBlock.IsNull() && !wtx.vin.size() && !wtx.vout.size() && !wtx.vShieldedSpend.size() && !wtx.vShieldedOutput.size())
+                {
+                    strErr = "nulltx";
+                }
                 return false;
+            }
 
             // Undo serialize changes in 31600
             if (31404 <= wtx.fTimeReceivedIsTxTime && wtx.fTimeReceivedIsTxTime <= 31703)
@@ -919,8 +925,14 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                     // Leave other errors alone, if we try to fix them we might make things worse.
                     fNoncriticalErrors = true; // ... but do warn the user there is something wrong.
                     if (strType == "tx")
+                    {
                         // Rescan if there is a bad transaction record:
                         SoftSetBoolArg("-rescan", true);
+                        if (strErr == "nulltx")
+                        {
+                            fNoncriticalErrors = false;
+                        }
+                    }
                 }
             }
             if (!strErr.empty())

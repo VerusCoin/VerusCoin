@@ -7,6 +7,8 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     rm /Applications/Agama.app/Contents/Resources/app/assets/bin/osx/verusd/*
     echo "Copying files"
     cp ./* /Applications/Agama.app/Contents/Resources/app/assets/bin/osx/verusd/
+    rm /Applications/Agama.app/Contents/Resources/app/assets/bin/osx/verusd/verusd
+    mv /Applications/Agama.app/Contents/Resources/app/assets/bin/osx/verusd/komodod /Applications/Agama.app/Contents/Resources/app/assets/bin/osx/verusd/verusd
     echo "Upgrade complete"
 else
     echo "Agama directory, followed by [ENTER]:"
@@ -15,5 +17,7 @@ else
     rm ${AGAMA_DIR}/resources/app/assets/bin/linux64/verusd/*
     echo "Copying files"
     cp ./* ${AGAMA_DIR}/resources/app/assets/bin/linux64/verusd/
+    rm ${AGAMA_DIR}/resources/app/assets/bin/linux64/verusd/verusd
+    mv ${AGAMA_DIR}/resources/app/assets/bin/linux64/verus/komodod ${AGAMA_DIR}/resources/app/assets/bin/linux64/verusd/verusd
     echo "Upgrade complete"
 fi

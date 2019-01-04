@@ -1,19 +1,14 @@
-## VerusCoin version 0.5.0 with VerusHash 2.0
+## VerusCoin version 0.5.3 with VerusHash 2.0
 
-VerusCoin is a new, mineable and stakeable cryptocurrency. 
-It is a live fork of Komodo that retains its Zcash lineage and improves it.
-VerusCoin will leverage the Komodo platform and dPoW notarization for enhanced security 
-and cross-chain interoperability. We have added a variation of a zawy12, lwma difficulty algorithm, a new CPU-optimized hash algorithm and a new algorithm for fair proof of stake.
-We describe these changes and vision going forward in [our Phase I white paper](http://185.25.51.16/papers/VerusPhaseI.pdf) and [our Vision](http://185.25.51.16/papers/VerusVision.pdf).
-- [VerusCoin web site https://veruscoin.io/ Wallets and CLI tools](https://veruscoin.io/)
-- [VerusCoin Explorer](https://explorer.veruscoin.io/)
+Arguably the world's most advanced technology, zero knowledge privacy-centric blockchain, Verus Coin brings Sapling performance and zero knowledge features to an intelligent system with interchain smart contracts and a completely original, combined proof of stake/proof of work consensus algorithm that solves the nothing at stake problem. With this and its approach towards CPU mining and ASICs, Verus Coin strives to be one of the most naturally decentralizing and attack resistant blockchains in existence.
 
+We have added a variation of a zawy12, lwma difficulty algorithm, a new CPU-optimized hash algorithm and a new algorithm for fair proof of stake. We describe these changes and vision going forward in a [our Phase I white paper](http://185.25.51.16/papers/VerusPhaseI.pdf) and [our Vision](http://185.25.51.16/papers/VerusVision.pdf).
 
-## Komodo with Bitcore
-This version of Komodo contains Bitcore support for komodo and all its assetchains.
+Also see our [VerusCoin web site](https://veruscoin.io/) and [VerusCoin Explorer](https://explorer.veruscoin.io/).
 
-## Komodod
+## VerusCoin
 This software is the VerusCoin enhanced Komodo client. Generally, you will use this if you want to mine VRSC or setup a full node. When you run the wallet it launches komodod automatically. On first launch it downloads Zcash parameters, roughly 1GB, which is mildly slow.
+
 The wallet downloads and stores the block chain or asset chain of the coin you select. It downloads and stores the entire history of the coins transactions; depending on the speed of your computer and network connection, the synchronization process could take a day or more once the blockchain has reached a significant size.
 
 ## Development Resources
@@ -45,13 +40,28 @@ The wallet downloads and stores the block chain or asset chain of the coin you s
 [See this article for more details](https://komodoplatform.atlassian.net/wiki/spaces/KPSD/pages/20480015/Claim+KMD+Interest+in+Agama)
 
 ## Tech Specification
-- Max Supply: 200 million KMD.
-- Block Time: 1M 2s
-- Block Reward: 3KMD
-- Mining Algorithm: Equihash
+- Launch Date May 21, 2018
+- Max Supply: 83,540,184 VRSC
+- Block Time: 1M
+- Block Reward: variable 24 on December 20, 2018
+- Mining Algorithm: VerusHash 2.0
+- Consensus 50% PoW, 50% PoS
+- Transaction Fee 0.0001
+- Privacy: Zcash Sprout
+- Komodo Platform with dPOW
+- CheatCatcher distributed stake cheating detector
 
 ## About this Project
-Komodo is based on Zcash and has been extended by our innovative consensus algorithm called dPoW which utilizes Bitcoin's hashrate to store Komodo blockchain information into the Bitcoin blockchain. Other new and native Komodo features are the privacy technology called JUMBLR, our assetchain capabilities (one click plug and play blockchain solutions) and a set of financial decentralization and interoperability technologies. More details are available under https://komodoplatform.com/ and https://blog.komodoplatform.com.
+VerusCoin is based on Komodo which is based on Zcash and has been extended by our innovative consensus staking and mining algorithms and a novel 50% PoW/50% PoS approach.
+
+Many VRSC innovations are now also available back in the Komodo fork:
+- Eras
+- Timelocking
+- VerusHash
+- VerusPoS
+- 50% PoS/50% PoW
+ 
+ More details including a link to our vision and white papers and client downloads are [available on our web site](https://veruscoin.io)
 
 ## Getting started
 
@@ -68,23 +78,23 @@ Building
 
 First time you'll need to get assorted startup values downloaded. This takes a moderate amount of time once but then does not need to be repeated unless you bring a new system up. The command is:
 ```
-./zcutil/fetch-params.sh
+zcutil/fetch-params.sh
 ```
 Building for Ubuntu/Mint/Debian:
 ```
-./zcutil/build.sh
+zcutil/build.sh
 ```
 Building for Mac OS/X (see README-MAC.md):
 ```
-./zcutil/build-mac.sh
+zcutil/build-mac.sh
 ```
 Building for Windows:
 ```
-./zcutil/build-win.sh
+zcutil/build-win.sh
 ```
 VerusCoin
 ------
-We develop on dev and some other branches and produce releases of of the master branch, using pull requests to manage what goes into master. The dev branch is considered the bleeding edge codebase, and may even be oncompatible from time to time, while the master-branch is considered tested (unit tests, runtime tests, functionality). At no point of time do the Komodo Platform developers or Verus Developers take any responsbility for any damage out of the usage of this software. 
+We develop on dev and some other branches and produce releases of of the master branch, using pull requests to manage what goes into master. The dev branch is considered the bleeding edge codebase, and may even be oncompatible from time to time, while the master-branch is considered tested (unit tests, runtime tests, functionality). At no point of time do the Komodo Platform developers or Verus Developers take any responsibility for any damage out of the usage of this software. 
 
 Verus builds for all operating systems out of the same codebase. Follow the OS specific instructions from below.
 
@@ -94,39 +104,37 @@ git clone https://github.com/VerusCoin/VerusCoin
 cd VerusCoin
 #you might want to: git checkout <branch>; git pull
 ./zcutil/fetch-params.sh
-# -j$(nproc) = using all threads for the compilation - replace $(nproc) with number of threads you want to use
-./zcutil/build.sh -j$(nproc)
+# -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use
+./zcutil/build.sh -j8
 #This can take some time.
 ```
 
 **The VerusCoin enhanced komodo is experimental and a work-in-progress.** Use at your own risk.
 
+#To view all commands
+./src/komodo-cli help
 
 #To view komodod output:
 tail -f ~/.komodo/debug.log
 #To view VRSC output:
 tail -f ~/.komodo/VRSC/debug.log
-Note that this directory is correct for Linux, not Mac or Windows
-#To view all command
-./src/komodo-cli help
+Note that this directory is correct for Linux, not Mac or Windows. Coin info for Verus is stored in ~/.komodo/VRSC under Ubuntu/Linux.
+
+For Windows coin info for Verus is stored under \Users<username>\AppData\Roaming\Komodo\VRSC
+
+For Mac coin info for Verus is stored under ~/Library/Application\ Support/Komodo/VRSC
+
 **Zcash is unfinished and highly experimental.** Use at your own risk.
 
-####  :ledger: Deprecation Policy
+Always back your wallets up carefully and securely, **especially before attempting the following process**
 
-This release is considered deprecated 16 weeks after the release day. There
-is an automatic deprecation shutdown feature which will halt the node some
-time after this 16 week time period. The automatic feature is based on block
-height.
-
-#Older Komodo Details
-The remaining text is from the komodo source we forked when creating VerusCoin/Veruscoin.
-
-**To change modes:**
-
-a) backup all privkeys (launch komodod with `-exportdir=<path>` and `dumpwallet`)
-b) start a totally new sync including `wallet.dat`, launch with same `exportdir`
-c) stop it before it gets too far and import all the privkeys from a) using `komodo-cli importwallet filename`
-d) resume sync till it gets to chaintip
+In some cases, messed up wallets can be recovered using this process
+ 
+- backup wallet.dat safely and securely
+- backup all privkeys (launch komodod with `-exportdir=<path>` and `dumpwallet`)
+- start a totally new sync including `wallet.dat`, launch with same `exportdir`
+- stop it before it gets too far and import all the privkeys from a) using `komodo-cli importwallet filename`
+- resume sync till it gets to chaintip
 
 For example:
 ```shell
@@ -145,3 +153,4 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notices and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+

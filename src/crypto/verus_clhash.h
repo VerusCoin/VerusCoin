@@ -35,6 +35,9 @@
 
 #include <boost/thread.hpp>
 #include "tinyformat.h"
+#ifdef __APPLE__
+void __tls_init();
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -173,6 +176,11 @@ struct verusclhasher {
     // align on 256 bit boundary at end
     verusclhasher(uint64_t keysize=VERUSKEYSIZE) : keySizeInBytes((keysize >> 5) << 5)
     {
+#ifdef __APPLE__
+        printf("Before tls init");
+       __tls_init();
+       printf("After tls init");
+#endif
         if (IsCPUVerusOptimized())
         {
             verusclhashfunction = &verusclhash;
@@ -190,7 +198,7 @@ struct verusclhasher {
         }
         // get buffer space for mutating and refresh keys
         void *key = NULL;
-        if (!(key = verusclhasher_key.get()) && 
+        if (!(key = verusclhasher_key.get()) &&
             (verusclhasher_key.reset((unsigned char *)alloc_aligned_buffer(keySizeInBytes << 1)), key = verusclhasher_key.get()))
         {
             verusclhash_descr *pdesc;

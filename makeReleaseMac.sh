@@ -28,7 +28,7 @@ do
     for dylib in ${DYLIBS}; do cp -rf ${dylib} ${KMD_DIR}; done
 done
 
-libraries=("libgcc_s.1.dylib" "libgomp.1.dylib" "libidn2.0.dylib" "libstdc++.6.dylib")
+libraries=("libgcc_s.1.dylib" "libgomp.1.dylib" "libidn2.0.dylib" "libstdc++.6.dylib" "libintl.8.dylib" "libunistring.2.dylib")
 
 for binary in "${libraries[@]}";
 do

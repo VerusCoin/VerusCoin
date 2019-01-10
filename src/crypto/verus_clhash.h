@@ -75,7 +75,7 @@ struct thread_specific_ptr {
         ptr = newptr;
     }
     void *get() { return ptr; }
-#ifdef _WIN32 // horrible MingW and gcc thread local storage bug workaround
+#ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
     ~thread_specific_ptr();
 #else
     ~thread_specific_ptr() {

@@ -7,6 +7,7 @@ $(package)_dependencies=
 $(package)_config_opts=
 endif
 
+
 define $(package)_preprocess_cmds
   cd $($(package)_build_subdir); ./autogen.sh
 endef

@@ -113,7 +113,7 @@ build:windows:
 ########################################################################################################################
 build:mac:
   stage: build
-  tags: ["High Sierra"]
+  tags: ["Mojave"]
   cache:
     key: "${CI_JOB_NAME}${CI_COMMIT_REF_NAME}"
     paths:

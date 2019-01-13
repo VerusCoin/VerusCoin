@@ -6,7 +6,7 @@ stages:
 ####START####                                     PROJECT LEVEL VARIABLES                                  ####START####
 ########################################################################################################################
 variables:
-  VERSION: 0.5.3
+  VERSION: 0.5.4
   VERUS_CLI_LINUX: Verus-CLI-Linux-v${VERSION}.tar.gz
   VERUS_CLI_WINDOWS: Verus-CLI-Windows-v${VERSION}.zip
   VERUS_CLI_MACOS: Verus-CLI-MacOS-v${VERSION}.tar.gz
@@ -111,7 +111,7 @@ build:windows:
 ########################################################################################################################
 ####START####                                            MACOS                                             ####START####
 ########################################################################################################################
-.build:mac:
+build:mac:
   stage: build
   tags: ["High Sierra"]
   cache:

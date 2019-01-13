@@ -73,9 +73,11 @@ struct thread_specific_ptr {
             std::free(ptr);
         }
         ptr = newptr;
+
     }
     void *get() { return ptr; }
-#ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
+#if defined(__APPLE__) || defined(_WIN32)
+    // horrible MingW and Mac with gcc thread local storage bug workaround
     ~thread_specific_ptr();
 #else
     ~thread_specific_ptr() {
@@ -167,7 +169,7 @@ struct verusclhasher {
     verusclhasher(uint64_t keysize=VERUSKEYSIZE) : keySizeInBytes((keysize >> 5) << 5)
     {
 #ifdef __APPLE__
-        __tls_init();
+       __tls_init();
 #endif
         if (IsCPUVerusOptimized())
         {
@@ -186,7 +188,7 @@ struct verusclhasher {
         }
         // get buffer space for mutating and refresh keys
         void *key = NULL;
-        if (!(key = verusclhasher_key.get()) && 
+        if (!(key = verusclhasher_key.get()) &&
             (verusclhasher_key.reset((unsigned char *)alloc_aligned_buffer(keySizeInBytes << 1)), key = verusclhasher_key.get()))
         {
             verusclhash_descr *pdesc;

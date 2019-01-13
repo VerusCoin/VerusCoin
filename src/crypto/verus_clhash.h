@@ -35,7 +35,7 @@
 
 #include <boost/thread.hpp>
 #include "tinyformat.h"
-#ifdef __APPLE__
+#if defined (__APPLE__ || _WIN32)
 void __tls_init();
 #endif
 
@@ -80,7 +80,8 @@ struct thread_specific_ptr {
 
     }
     void *get() { return ptr; }
-#ifdef _WIN32  // horrible MingW and gcc thread local storage bug workaround
+#if defined (__APPLE__ || _WIN32)
+    // horrible MingW and Mac with gcc thread local storage bug workaround
     ~thread_specific_ptr();
 #else
     ~thread_specific_ptr() {

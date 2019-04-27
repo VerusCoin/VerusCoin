@@ -14,9 +14,9 @@ AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 
-BITCOIN_DAEMON_NAME=komodod
-BITCOIN_CLI_NAME=komodo-cli
-BITCOIN_TX_NAME=komodo-tx
+BITCOIN_DAEMON_NAME=verusd
+BITCOIN_CLI_NAME=verus
+BITCOIN_TX_NAME=verus-tx
 
 dnl Unless the user specified ARFLAGS, force it to be cr
 AC_ARG_VAR(ARFLAGS, [Flags for the archiver, defaults to <cr> if not set])
@@ -226,7 +226,7 @@ CPPFLAGS="$CPPFLAGS -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS"
 
 AC_ARG_WITH([utils],
   [AS_HELP_STRING([--with-utils],
-  [build komodo-cli komodo-tx wallet-utility (default=yes)])],
+  [build verus verus-tx wallet-utility (default=yes)])],
   [build_bitcoin_utils=$withval],
   [build_bitcoin_utils=yes])
 
@@ -805,7 +805,7 @@ AC_MSG_CHECKING([whether to build bitcoind])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
 AC_MSG_RESULT($build_bitcoind)
 
-AC_MSG_CHECKING([whether to build utils (komodo-cli komodo-tx wallet-utility)])
+AC_MSG_CHECKING([whether to build utils (verus verus-tx wallet-utility)])
 AM_CONDITIONAL([BUILD_BITCOIN_UTILS], [test x$build_bitcoin_utils = xyes])
 AC_MSG_RESULT($build_bitcoin_utils)
 

@@ -1495,6 +1495,7 @@ bool verusCheckPOSBlock(int32_t slowflag, CBlock *pblock, int32_t height)
             bool validHash = (value != 0);
             bool enablePOSNonce = CPOSNonce::NewPOSActive(height);
             bool newPOSEnforcement = enablePOSNonce && (Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight <= height);
+            bool supportInstantSpend = CConstVerusSolutionVector::activationHeight.ActiveVersion(height) >= CActivationHeight::SOLUTION_VERUSV3;
             uint256 rawHash;
             arith_uint256 posHash;
 
@@ -1515,7 +1516,7 @@ bool verusCheckPOSBlock(int32_t slowflag, CBlock *pblock, int32_t height)
                     for (int i = 0; validHash && i < pblock->vtx[0].vout.size(); i++)
                     {
                         validHash = false;
-                        if (ValidateMatchingStake(pblock->vtx[0], i, pblock->vtx[txn_count-1], validHash) && !validHash)
+                        if (pblock->vtx[0].vout[i].scriptPubKey.IsInstantSpend() || ValidateMatchingStake(pblock->vtx[0], i, pblock->vtx[txn_count-1], validHash) && !validHash)
                         {
                             if ((p.prevHash == pblock->hashPrevBlock) && (int32_t)p.blkHeight == height)
                             {
@@ -1639,12 +1640,13 @@ bool verusCheckPOSBlock(int32_t slowflag, CBlock *pblock, int32_t height)
                                                 {
                                                     txnouttype tp;
                                                     std::vector<std::vector<unsigned char>> vvch = std::vector<std::vector<unsigned char>>();
-                                                    // solve all outputs to check that destinations all go only to the pk
+                                                    // solve all outputs to check that non-instantspend destinations all go only to the pk
                                                     // specified in the stake params
-                                                    if (!Solver(vout.scriptPubKey, tp, vvch) || 
+                                                    if ((!supportInstantSpend || !vout.scriptPubKey.IsInstantSpend()) &&
+                                                        (!Solver(vout.scriptPubKey, tp, vvch) || 
                                                         tp != TX_CRYPTOCONDITION || 
                                                         vvch.size() < 2 || 
-                                                        p.pk != CPubKey(vvch[1]))
+                                                        p.pk != CPubKey(vvch[1])))
                                                     {
                                                         isPOS = false;
                                                         break;

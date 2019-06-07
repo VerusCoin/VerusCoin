@@ -119,6 +119,9 @@ bool AppInit(int argc, char* argv[])
 
     try
     {
+        if (!AppInitNetworking())
+            return false;
+
         void komodo_args(char *argv0);
         komodo_args(argv[0]);
         fprintf(stderr,"call komodo_args.(%s) NOTARY_PUBKEY.(%s)\n",argv[0],NOTARY_PUBKEY.c_str());

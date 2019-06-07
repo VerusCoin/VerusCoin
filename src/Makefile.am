@@ -201,12 +201,17 @@ BITCOIN_CORE_H = \
   merkleblock.h \
   metrics.h \
   miner.h \
+  pbaasrpc.h \
+  mmr.h \
   mruset.h \
   net.h \
   netbase.h \
   noui.h \
   paymentdisclosure.h \
   paymentdisclosuredb.h \
+  pbaas/crosschainrpc.h \
+  pbaas/notarization.h \
+  pbaas/pbaas.h \
   policy/fees.h \
   pow.h \
   prevector.h \
@@ -335,6 +340,9 @@ libbitcoin_server_a_SOURCES = \
   notarisationdb.cpp \
   paymentdisclosure.cpp \
   paymentdisclosuredb.cpp \
+  pbaas/crosschainrpc.cpp \
+  pbaas/notarization.cpp \
+  pbaas/pbaas.cpp \
   policy/fees.cpp \
   pow.cpp \
   primitives/solutiondata.cpp \
@@ -342,6 +350,7 @@ libbitcoin_server_a_SOURCES = \
   rpc/blockchain.cpp \
   rpc/crosschain.cpp \
   rpc/mining.cpp \
+  rpc/pbaasrpc.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \
   rpc/rawtransaction.cpp \

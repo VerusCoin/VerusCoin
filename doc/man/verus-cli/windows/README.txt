@@ -1,4 +1,4 @@
-VerusCoin Command Line Tools v0.5.6a
+VerusCoin Command Line Tools v0.6.0
 Contents:
 komodod.exe - VerusCoin's enhanced Komodo daemon
 komodo-cli.exe - VerusCoin's Komodo command line utility
@@ -20,4 +20,3 @@ Note that if you pass in command line options to verus.bat or verusd.bat that in
 verusd.bat "-ac_veruspos=50"
 Otherwise Windows will drop the = and pass the two values in as separate command line options.
 
-To upgrade your Verus Enhanced Agama Wallet, run upgrade-agama.bat and enter the directory to your agama app

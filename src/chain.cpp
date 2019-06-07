@@ -14,13 +14,80 @@ void CChain::SetTip(CBlockIndex *pindex) {
     lastTip = pindex;
     if (pindex == NULL) {
         vChain.clear();
+        mmr.Truncate(0);
         return;
     }
+    uint32_t modCount = 0;
     vChain.resize(pindex->GetHeight() + 1);
     while (pindex && vChain[pindex->GetHeight()] != pindex) {
+        modCount++;
         vChain[pindex->GetHeight()] = pindex;
         pindex = pindex->pprev;
     }
+    mmr.Truncate(vChain.size() - modCount);
+    for (int i = (vChain.size() - modCount); i < vChain.size(); i++)
+    {
+        // add this block to the Merkle Mountain Range
+        mmr.Add(vChain[i]->GetMMRNode());
+    }
+}
+
+// returns false if unable to fast calculate the VerusPOSHash from the header. 
+// if it returns false, value is set to 0, but it can still be calculated from the full block
+// in that case. the only difference between this and the POS hash for the contest is that it is not divided by the value out
+// this is used as a source of entropy
+bool CBlockIndex::GetRawVerusPOSHash(uint256 &ret) const
+{
+    // if below the required height or no storage space in the solution, we can't get
+    // a cached txid value to calculate the POSHash from the header
+    if (!(CPOSNonce::NewNonceActive(GetHeight()) && IsVerusPOSBlock()))
+    {
+        ret = uint256();
+        return false;
+    }
+
+    // if we can calculate, this assumes the protocol that the POSHash calculation is:
+    //    hashWriter << ASSETCHAINS_MAGIC;
+    //    hashWriter << nNonce; (nNonce is:
+    //                           (high 128 bits == low 128 bits of verus hash of low 128 bits of nonce)
+    //                           (low 32 bits == compact PoS difficult)
+    //                           (mid 96 bits == low 96 bits of HASH(pastHash, txid, voutnum)
+    //                              pastHash is hash of height - 100, either PoW hash of block or PoS hash, if new PoS
+    //                          )
+    //    hashWriter << height;
+    //    return hashWriter.GetHash();
+    if (nVersion == CBlockHeader::VERUS_V2)
+    {
+        CVerusHashV2Writer hashWriter = CVerusHashV2Writer(SER_GETHASH, PROTOCOL_VERSION);
+
+        hashWriter << ASSETCHAINS_MAGIC;
+        hashWriter << nNonce;
+        hashWriter << GetHeight();
+        ret = hashWriter.GetHash();
+    }
+    else
+    {
+        CVerusHashWriter hashWriter = CVerusHashWriter(SER_GETHASH, PROTOCOL_VERSION);
+
+        hashWriter << ASSETCHAINS_MAGIC;
+        hashWriter << nNonce;
+        hashWriter << GetHeight();
+        ret = hashWriter.GetHash();
+    }
+    return true;
+}
+
+// depending on the height of the block and its type, this returns the POS hash or the POW hash
+uint256 CBlockIndex::GetVerusEntropyHash() const
+{
+    uint256 retVal;
+    // if we qualify as PoW, use PoW hash, regardless of PoS state
+    if (GetRawVerusPOSHash(retVal))
+    {
+        // POS hash
+        return retVal;
+    }
+    return GetBlockHash();
 }
 
 CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
@@ -108,8 +175,10 @@ bool operator<=(const CChainPower &p1, const CChainPower &p2)
             ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
 }
 
-
-
+CChainPower ExpandCompactPower(uint256 compactPower, uint32_t height)
+{
+    return CChainPower(height, UintToArith256(compactPower) >> 128, (UintToArith256(compactPower) << 128) >> 128);
+}
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
 int static inline InvertLowestOne(int n) { return n & (n - 1); }

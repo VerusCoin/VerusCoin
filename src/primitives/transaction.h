@@ -684,7 +684,8 @@ public:
 
     bool IsMint() const
     {
-        return IsCoinImport() || IsCoinBase();
+        // return IsCoinImport() || IsCoinBase();
+        return IsCoinBase();
     }
 
     bool IsCoinBase() const
@@ -696,7 +697,8 @@ public:
 
     bool IsCoinImport() const
     {
-        return (vin.size() == 1 && vin[0].prevout.n == 10e8);
+        // return (vin.size() == 1 && vin[0].prevout.n == 10e8);
+        return false; // we don't support "importing" coins this way
     }
 
     friend bool operator==(const CTransaction& a, const CTransaction& b)

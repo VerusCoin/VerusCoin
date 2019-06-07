@@ -13,7 +13,7 @@
  *                                                                            *
  ******************************************************************************/
 
-#include "komodo_defs.h"
+#include "komodo_structs.h"
 
 void komodo_prefetch(FILE *fp);
 uint32_t komodo_heightstamp(int32_t height);
@@ -50,7 +50,17 @@ std::string VERUS_CHEATCATCHER, NOTARY_PUBKEY,ASSETCHAINS_NOTARIES,ASSETCHAINS_O
 uint8_t NOTARY_PUBKEY33[33],ASSETCHAINS_OVERRIDE_PUBKEY33[33],ASSETCHAINS_PUBLIC,ASSETCHAINS_PRIVATE;
 bool VERUS_MINTBLOCKS;
 
-char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN],ASSETCHAINS_USERPASS[4096];
+char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN], ASSETCHAINS_USERPASS[4096];
+
+bool PBAAS_TESTMODE;
+std::string PBAAS_HOST;
+int32_t PBAAS_PORT;
+std::string PBAAS_USERPASS;
+std::string ASSETCHAINS_RPCHOST, ASSETCHAINS_RPCCREDENTIALS;
+
+uint160 ASSETCHAINS_CHAINID;
+uint160 VERUS_CHAINID;
+std::string VERUS_CHAINNAME;
 uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 uint32_t ASSETCHAIN_INIT,ASSETCHAINS_CC,KOMODO_STOPAT;
 uint32_t ASSETCHAINS_MAGIC = 2387029918;
@@ -64,8 +74,7 @@ int64_t MAX_MONEY = 200000000 * 100000000LL;
 // release time determined from the blockchain. to do this, every time locked output according to this
 // spec will use an op_return with CLTV at front and anything after |OP_RETURN|PUSH of rest|OPRETTYPE_TIMELOCK|script|
 #define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
-uint64_t ASSETCHAINS_TIMELOCKGTE = _ASSETCHAINS_TIMELOCKOFF;
-uint64_t ASSETCHAINS_TIMEUNLOCKFROM = 0, ASSETCHAINS_TIMEUNLOCKTO = 0;
+uint64_t ASSETCHAINS_TIMELOCKGTE = _ASSETCHAINS_TIMELOCKOFF, ASSETCHAINS_TIMEUNLOCKFROM = 0, ASSETCHAINS_TIMEUNLOCKTO = 0;
 
 uint32_t ASSETCHAINS_LASTERA = 1;
 uint64_t ASSETCHAINS_ENDSUBSIDY[ASSETCHAINS_MAX_ERAS],ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS],ASSETCHAINS_HALVING[ASSETCHAINS_MAX_ERAS],ASSETCHAINS_DECAY[ASSETCHAINS_MAX_ERAS];
@@ -86,6 +95,8 @@ int32_t VERUS_BLOCK_POSUNITS = 1024;    // one block is 1000 units
 int32_t VERUS_MIN_STAKEAGE = 150;       // 1/2 this should also be a cap on the POS averaging window, or startup could be too easy
 int32_t VERUS_CONSECUTIVE_POS_THRESHOLD = 7;
 int32_t VERUS_NOPOS_THRESHHOLD = 150;   // if we have no POS blocks in this many blocks, set to default difficulty
+int32_t PBAAS_STARTBLOCK = 0;           // the parent blockchain must be notarized at this value in block 1 for it to be accepted
+int32_t PBAAS_ENDBLOCK = 0;             // end of life block for the PBaaS blockchain
 
 int32_t ASSETCHAINS_SAPLING;
 int32_t ASSETCHAINS_OVERWINTER;
@@ -133,7 +144,7 @@ int64_t komodo_current_supply(uint32_t nHeight)
     else 
     {
         // figure out max_money by adding up supply to a maximum of 10,000,000 blocks
-        cur_money = (ASSETCHAINS_SUPPLY+1) * SATOSHIDEN + (ASSETCHAINS_MAGIC & 0xffffff) + ASSETCHAINS_GENESISTXVAL;
+        cur_money = (ASSETCHAINS_SUPPLY+1) + (ASSETCHAINS_MAGIC & 0xffffff) + ASSETCHAINS_GENESISTXVAL;
         if ( ASSETCHAINS_LASTERA == 0 && ASSETCHAINS_REWARD[0] == 0 )
         {
             cur_money += (nHeight * 10000) / SATOSHIDEN;
@@ -154,6 +165,10 @@ int64_t komodo_current_supply(uint32_t nHeight)
                     uint64_t lastEnd = j == 0 ? 0 : ASSETCHAINS_ENDSUBSIDY[j - 1];
                     uint64_t curEnd = ASSETCHAINS_ENDSUBSIDY[j] == 0 ? nHeight : nHeight > ASSETCHAINS_ENDSUBSIDY[j] ? ASSETCHAINS_ENDSUBSIDY[j] : nHeight;
                     uint64_t period = ASSETCHAINS_HALVING[j];
+                    if (period == 0)
+                    {
+                        period = curEnd - lastEnd;
+                    }
                     uint32_t nSteps = (curEnd - lastEnd) / period;
                     uint32_t modulo = (curEnd - lastEnd) % period;
                     uint64_t decay = ASSETCHAINS_DECAY[j];
@@ -238,6 +253,15 @@ int64_t komodo_current_supply(uint32_t nHeight)
                     }
                     else
                     {
+                        if (period == 0)
+                        {
+
+                        }
+                        else
+                        {
+                            /* code */
+                        }
+                        
                         for ( int k = lastEnd; k < curEnd; k += period )
                         {
                             cur_money += period * reward;

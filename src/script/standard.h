@@ -16,6 +16,12 @@
 class CKeyID;
 class CScript;
 
+class CNoDestination {
+public:
+    friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
+    friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
+};
+
 /** A reference to a CScript: the Hash160 of its serialization (see script.h) */
 class CScriptID : public uint160
 {
@@ -23,6 +29,39 @@ public:
     CScriptID() : uint160() {}
     CScriptID(const CScript& in);
     CScriptID(const uint160& in) : uint160(in) {}
+};
+
+/** 
+ * A txout script template with a specific destination. It is either:
+ *  * CNoDestination: no destination set
+ *  * CKeyID: TX_PUBKEYHASH destination
+ *  * CScriptID: TX_SCRIPTHASH destination
+ *  A CTxDestination is the internal data type encoded in a bitcoin address
+ */
+typedef boost::variant<CNoDestination, CPubKey, CKeyID, CScriptID> CTxDestination;
+
+class COptCCParams
+{
+    public:
+        static const uint8_t VERSION_V1 = 1;
+        static const uint8_t VERSION_V2 = 2;
+
+        uint8_t version;
+        uint8_t evalCode;
+        uint8_t m, n; // for m of n sigs required, n pub keys for sigs will follow
+        std::vector<CTxDestination> vKeys;
+        std::vector<std::vector<unsigned char>> vData; // extra parameters
+
+        COptCCParams() : version(0), evalCode(0), n(0), m(0) {}
+
+        COptCCParams(uint8_t ver, uint8_t code, uint8_t _n, uint8_t _m, std::vector<CTxDestination> &vkeys, std::vector<std::vector<unsigned char>> &vdata) : 
+            version(ver), evalCode(code), n(_n), m(_m), vKeys(vkeys), vData(vdata) {}
+
+        COptCCParams(std::vector<unsigned char> &vch);
+
+        bool IsValid() { return version != 0; }
+
+        std::vector<unsigned char> AsVector();
 };
 
 static const unsigned int MAX_OP_RETURN_RELAY = 8192;      //! bytes
@@ -66,44 +105,6 @@ enum txnouttype
     TX_MULTISIG,
     TX_CRYPTOCONDITION,
     TX_NULL_DATA,
-};
-
-class CNoDestination {
-public:
-    friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
-    friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
-};
-
-/** 
- * A txout script template with a specific destination. It is either:
- *  * CNoDestination: no destination set
- *  * CKeyID: TX_PUBKEYHASH destination
- *  * CScriptID: TX_SCRIPTHASH destination
- *  A CTxDestination is the internal data type encoded in a bitcoin address
- */
-typedef boost::variant<CNoDestination, CPubKey, CKeyID, CScriptID> CTxDestination;
-
-class COptCCParams
-{
-    public:
-        static const uint8_t VERSION = 1;
-
-        uint8_t version;
-        uint8_t evalCode;
-        uint8_t m, n; // for m of n sigs required, n pub keys for sigs will follow
-        std::vector<CPubKey> vKeys; // n public keys to aid in signing
-        std::vector<std::vector<unsigned char>> vData; // extra parameters
-
-        COptCCParams() : version(0), evalCode(0), n(0), m(0) {}
-
-        COptCCParams(uint8_t ver, uint8_t code, uint8_t _n, uint8_t _m, std::vector<CPubKey> &vkeys, std::vector<std::vector<unsigned char>> &vdata) : 
-            version(ver), evalCode(code), n(_n), m(_m), vKeys(vkeys), vData(vdata) {}
-
-        COptCCParams(std::vector<unsigned char> &vch);
-
-        bool IsValid() { return version != 0; }
-
-        std::vector<unsigned char> AsVector();
 };
 
 class CStakeParams
@@ -158,5 +159,36 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 
 CScript GetScriptForDestination(const CTxDestination& dest);
 CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys);
+
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams);
+
+template <typename T>
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams, T &extraObject)
+{
+    CScript subScript;
+    std::vector<std::vector<unsigned char>> vParams;
+    COptCCParams p;
+
+    if (scr.IsPayToCryptoCondition(&subScript, vParams))
+    {
+        if (!vParams.empty())
+        {
+            ccParams = COptCCParams(vParams[0]);
+            if (ccParams.IsValid() && ccParams.vData.size() > 0)
+            {
+                try
+                {
+                    extraObject = T(ccParams.vData[0]);
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << e.what() << '\n';
+                }
+            }
+        }
+        return true;
+    }
+    return false;
+}
 
 #endif // BITCOIN_SCRIPT_STANDARD_H

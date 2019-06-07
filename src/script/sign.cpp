@@ -97,80 +97,6 @@ CC *CCcond1(uint8_t evalcode,CPubKey pk)
     return CCNewThreshold(2, {condCC, Sig});
 }
 
-// TODO: these are redundant and should be cleaned up to one file
-std::string _StakeGuardAddr = "RCG8KwJNDVwpUBcdoa6AoHqHVJsA1uMYMR";
-std::string _StakeGuardPubKey = "03166b7813a4855a88e9ef7340a692ef3c2decedfdc2c7563ec79537e89667d935";
-std::string _StakeGuardWIF = "Uw7vRYHGKjyi1FaJ8Lv1USSuj7ntUti8fAhSDiCdbzuV6yDagaTn";
-
-std::vector<CCcontract_info> &GetCryptoConditions()
-{
-    static bool initialized = false;
-    static std::vector<CCcontract_info> vCC = std::vector<CCcontract_info>();
-    CCcontract_info C;
-
-    if (!initialized)
-    {
-        C.evalcode = EVAL_STAKEGUARD;
-        strcpy(C.unspendableCCaddr,_StakeGuardAddr.c_str());
-        strcpy(C.normaladdr,_StakeGuardAddr.c_str());
-        strcpy(C.CChexstr,_StakeGuardPubKey.c_str());
-        memcpy(C.CCpriv, DecodeSecret(_StakeGuardWIF).begin(),32);
-        vCC.push_back(C);
-
-        initialized = true;
-    }
-    return vCC;
-}
-
-bool GetCCByUnspendableAddress(struct CCcontract_info *cp, char *addrstr)
-{
-    std::vector<CCcontract_info> &vCC = GetCryptoConditions();
-    bool found = false;
-
-    for (int i = 0; i < vCC.size(); i++)
-    {
-        if (strcmp(addrstr, vCC[i].unspendableCCaddr) == 0)
-        {
-            found = true;
-            *cp = vCC[i];
-            break;
-        }
-    }
-    return found;
-}
-
-bool CCinitLite(struct CCcontract_info *cp, uint8_t evalcode)
-{
-    std::vector<CCcontract_info> &vCC = GetCryptoConditions();
-    bool found = false;
-
-    for (int i = 0; i < vCC.size(); i++)
-    {
-        if (vCC[i].evalcode == evalcode)
-        {
-            found = true;
-            *cp = vCC[i];
-            break;
-        }
-    }
-    return found;
-}
-
-bool _GetscriptaddressEx(char *destaddr, const CScript &scriptPubKey)
-{
-    CTxDestination address; 
-    txnouttype whichType;
-    std::vector<std::vector<unsigned char>> vvch = std::vector<std::vector<unsigned char>>();
-    if (Solver(scriptPubKey, whichType, vvch) && vvch[0].size() == 20)
-    {
-        address = CKeyID(uint160(vvch[0]));
-        strcpy(destaddr,(char *)CBitcoinAddress(address).ToString().c_str());
-        return(true);
-    }
-    fprintf(stderr,"Solver for scriptPubKey failed\n%s\n", scriptPubKey.ToString().c_str());
-    return(false);
-}
-
 CScript _CCPubKey(const CC *cond)
 {
     unsigned char buf[1000];
@@ -182,7 +108,7 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
                        vector<valtype>& ret, uint32_t consensusBranchId)
 {
     CScript subScript;
-    vector<CPubKey> vPK;
+    vector<CTxDestination> vPK;
     vector<valtype> vParams = vector<valtype>();
     COptCCParams p;
 
@@ -192,13 +118,14 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
     scriptPubKey.IsPayToCryptoCondition(&subScript, vParams);
     if (vParams.empty())
     {
-        // get the keyID address of the cc and if it is an unspendable cc address, use its pubkey
-        // we have nothing else
-        char addr[64];
-        if (_GetscriptaddressEx(addr, subScript) && GetCCByUnspendableAddress(&C, addr))
+        uint32_t ecode;
+        scriptPubKey.IsPayToCryptoCondition(&ecode);
+
+        // use the cryptocondition's pubkey, we have nothing else
+        if (CCinit(&C, p.evalCode))
         {
-            vPK.push_back(CPubKey(ParseHex(C.CChexstr)));
-            p = COptCCParams(p.VERSION, C.evalcode, 1, 1, vPK, vParams);
+            vPK.push_back(CTxDestination(CPubKey(ParseHex(C.CChexstr))));
+            p = COptCCParams(p.VERSION_V1, C.evalcode, 1, 1, vPK, vParams);
         }
     }
     else
@@ -212,33 +139,49 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
         CKey privKey;
 
         // must be a valid cc eval code
-        if (CCinitLite(&C, p.evalCode))
+        if (CCinit(&C, p.evalCode))
         {
             // pay to cc address is a valid tx
             if (!is1of2)
             {
-                bool havePriv = creator.KeyStore().GetKey(p.vKeys[0].GetID(), privKey);
+                uint160 keyID = GetDestinationID(p.vKeys[0]);
+                bool havePriv = creator.KeyStore().GetKey(keyID, privKey);
+                CPubKey pubk;
 
                 // if we don't have the private key, it must be the unspendable address
-                if (!havePriv && (p.vKeys[0] == CPubKey(ParseHex(C.CChexstr))))
+                if (havePriv)
+                {
+                    std::vector<unsigned char> vkch = GetDestinationBytes(p.vKeys[0]);
+                    if (vkch.size() == 33)
+                    {
+                        pubk = CPubKey(vkch);
+                    }
+                    else
+                    {
+                        creator.KeyStore().GetPubKey(keyID, pubk);
+                    }
+                }
+                else
                 {
                     privKey = CKey();
                     std::vector<unsigned char> vch(&(C.CCpriv[0]), C.CCpriv + sizeof(C.CCpriv));
-                    privKey.Set(vch.begin(), vch.end(), false);
+
+                    privKey.Set(vch.begin(), vch.end(), true);
+                    pubk = CPubKey(ParseHex(C.CChexstr));
                 }
 
-                CC *cc = CCcond1(p.evalCode, p.vKeys[0]);
+                CC *cc = CCcond1(p.evalCode, pubk);
 
                 if (cc)
                 {
                     vector<unsigned char> vch;
-                    if (creator.CreateSig(vch, p.vKeys[0].GetID(), _CCPubKey(cc), consensusBranchId, &privKey, (void *)cc))
+                    if (creator.CreateSig(vch, GetDestinationID(p.vKeys[0]), _CCPubKey(cc), consensusBranchId, &privKey, (void *)cc))
                     {
                         ret.push_back(vch);
                     }
                     else
                     {
-                        fprintf(stderr,"vin has 1of1 CC signing error with address.(%s)\n", p.vKeys[0].GetID().ToString().c_str());
+                        fprintf(stderr,"vin has 1of1 CC signing error with address.(%s)\n", keyID.ToString().c_str());
                     }
 
                     cc_free(cc);
@@ -247,17 +190,46 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
             }
             else
             {
-                // first of priv key in our key store or contract address is what we sign with
+                // first of priv key in our key store or contract address is what we sign with if we have it
+                std::vector<CPubKey> keys;
                 for (auto pk : p.vKeys)
                 {
+                    uint160 keyID = GetDestinationID(pk);
+                    std::vector<unsigned char> vkch = GetDestinationBytes(pk);
+                    if (vkch.size() == 33)
+                    {
+                        keys.push_back(CPubKey(vkch));
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                // if we only have one key, and this is version 2, add the cc pub key
+                if (keys.size() == 1 && p.version == p.VERSION_V2)
+                {
+                    keys.push_back(CPubKey(ParseHex(C.CChexstr)));
+                }
+
+                // we need two keys
+                if (keys.size() < 2)
+                {
+                    return false;
+                }
+
+                for (auto pk : keys)
+                {
                     if (creator.IsKeystoreValid() && creator.KeyStore().GetKey(pk.GetID(), privKey) && privKey.IsValid())
+                    {
                         break;
+                    }
 
                     if (pk == CPubKey(ParseHex(C.CChexstr)))
                     {
                         privKey = CKey();
                         std::vector<unsigned char> vch(&(C.CCpriv[0]), C.CCpriv + sizeof(C.CCpriv));
-                        privKey.Set(vch.begin(), vch.end(), false);
+                        privKey.Set(vch.begin(), vch.end(), true);
                         break;
                     }
                 }
@@ -265,18 +237,18 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
                 if (!privKey.IsValid())
                     return false;
 
-                CC *cc = CCcond1of2(p.evalCode, p.vKeys[0], p.vKeys[1]);
+                CC *cc = CCcond1of2(p.evalCode, keys[0], keys[1]);
 
                 if (cc)
                 {
                     vector<unsigned char> vch;
-                    if (creator.CreateSig(vch, p.vKeys[0].GetID(), _CCPubKey(cc), consensusBranchId, &privKey, (void *)cc))
+                    if (creator.CreateSig(vch, keys[0].GetID(), _CCPubKey(cc), consensusBranchId, &privKey, (void *)cc))
                     {
                         ret.push_back(vch);
                     }
                     else
                     {
-                        fprintf(stderr,"vin has 1of2 CC signing error with addresses.(%s)\n(%s)\n", p.vKeys[0].GetID().ToString().c_str(), p.vKeys[1].GetID().ToString().c_str());
+                        fprintf(stderr,"vin has 1of2 CC signing error with addresses.(%s)\n(%s)\n", keys[0].GetID().ToString().c_str(), keys[1].GetID().ToString().c_str());
                     }
 
                     cc_free(cc);
@@ -380,7 +352,7 @@ static CScript PushAll(const vector<valtype>& values)
 bool ProduceSignature(const BaseSignatureCreator& creator, const CScript& fromPubKey, SignatureData& sigdata, uint32_t consensusBranchId)
 {
     CScript script = fromPubKey;
-    bool solved = true;
+    bool solved;
     std::vector<valtype> result;
     txnouttype whichType;
     solved = SignStep(creator, script, result, whichType, consensusBranchId);

@@ -24,6 +24,8 @@
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
+#include "pbaas/pbaas.h"
+#include "pbaas/notarization.h"
 
 #include <stdint.h>
 
@@ -37,6 +39,7 @@ extern int32_t ASSETCHAINS_ALGO, ASSETCHAINS_EQUIHASH, ASSETCHAINS_LWMAPOS;
 extern uint64_t ASSETCHAINS_STAKED;
 extern int32_t KOMODO_MININGTHREADS;
 extern bool VERUS_MINTBLOCKS;
+extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t height,int32_t goalperc);
 
 /**
@@ -427,7 +430,21 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
     obj.push_back(Pair("chain",            Params().NetworkIDString()));
 #ifdef ENABLE_MINING
     obj.push_back(Pair("staking",          VERUS_MINTBLOCKS));
-    obj.push_back(Pair("generate",         GetBoolArg("-gen", false)));
+    bool mining = GetBoolArg("-gen", false);
+    auto chains = ConnectedChains.GetMergeMinedChains();
+    bool mergeMining = mining && ((!IsVerusActive() && ConnectedChains.IsVerusPBaaSAvailable()) || (IsVerusActive() && chains.size()));
+    int numChains = mergeMining ? (IsVerusActive() ? chains.size() + 1 : 1) : 0;
+    obj.push_back(Pair("generate",         mining));
+    obj.push_back(Pair("mergemining",      numChains));
+    if (chains.size())
+    {
+        UniValue chainNames(UniValue::VARR);
+        for (auto chain : chains)
+        {
+            chainNames.push_back(chain.name);
+        }
+        obj.push_back(Pair("mergeminedchains", chainNames));
+    }
     obj.push_back(Pair("numthreads",       (int64_t)KOMODO_MININGTHREADS));
 #endif
     return obj;
@@ -563,8 +580,10 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
 
     std::string strMode = "template";
     UniValue lpval = NullUniValue;
+
     // TODO: Re-enable coinbasevalue once a specification has been written
     bool coinbasetxn = true;
+
     if (params.size() > 0)
     {
         const UniValue& oparam = params[0].get_obj();
@@ -856,9 +875,19 @@ UniValue submitblock(const UniValue& params, bool fHelp)
         );
 
     CBlock block;
-    //LogPrintStr("Hex block submission: " + params[0].get_str());
-    if (!DecodeHexBlk(block, params[0].get_str()))
+    try
+    {
+        //LogPrintStr("Hex block submission: " + params[0].get_str());
+        if (!DecodeHexBlk(block, params[0].get_str()))
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
+    }
+    catch (exception e)
+    {
+        printf("Exception: %s\n", e.what());
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
+    }
+
+    printf("Received block submission for %s\nhash: %s\n", ASSETCHAINS_SYMBOL, block.GetHash().GetHex().c_str());
 
     uint256 hash = block.GetHash();
     bool fBlockPresent = false;
@@ -869,6 +898,8 @@ UniValue submitblock(const UniValue& params, bool fHelp)
             CBlockIndex *pindex = mi->second;
             if (pindex)
             {
+                printf("Already have block %s\n", block.GetHash().GetHex().c_str());
+
                 if (pindex->IsValid(BLOCK_VALID_SCRIPTS))
                     return "duplicate";
                 if (pindex->nStatus & BLOCK_FAILED_MASK)
@@ -885,6 +916,11 @@ UniValue submitblock(const UniValue& params, bool fHelp)
     //printf("submitblock, height=%d, coinbase sequence: %d, scriptSig: %s\n", chainActive.LastTip()->GetHeight()+1, block.vtx[0].vin[0].nSequence, block.vtx[0].vin[0].scriptSig.ToString().c_str());
     bool fAccepted = ProcessNewBlock(1,chainActive.LastTip()->GetHeight()+1,state, NULL, &block, true, NULL);
     UnregisterValidationInterface(&sc);
+    if (fBlockPresent || !fAccepted || !sc.found)
+    {
+        //printf("Block was not accepted %s\n", state.GetRejectReason().c_str());
+        ConnectedChains.lastSubmissionFailed = true;
+    }
     if (fBlockPresent)
     {
         if (fAccepted && !sc.found)

@@ -123,6 +123,13 @@ string EncodeHexTx(const CTransaction& tx)
     return HexStr(ssTx.begin(), ssTx.end());
 }
 
+string EncodeHexBlk(const CBlock& tx)
+{
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+    ssTx << tx;
+    return HexStr(ssTx.begin(), ssTx.end());
+}
+
 void ScriptPubKeyToUniv(const CScript& scriptPubKey,
                         UniValue& out, bool fIncludeHex)
 {

@@ -10,6 +10,7 @@
 #include "util.h"
 #include "utilstrencodings.h"
 #include "script/cc.h"
+#include "key_io.h"
 
 #include <boost/foreach.hpp>
 
@@ -69,9 +70,9 @@ COptCCParams::COptCCParams(std::vector<unsigned char> &vch)
                 evalCode = param[1];
                 m = param[2];
                 n = param[3];
-                if (version != VERSION || m != 1 || (n != 1 && n != 2) || data.size() <= n)
+                if (version == 0 || version > VERSION_V2 || m != 1 || (n != 1 && n != 2) || data.size() <= n)
                 {
-                    // we only support one version, and 1 of 1 or 1 of 2 now, so set invalid
+                    // set invalid
                     version = 0;
                 }
                 else
@@ -82,12 +83,30 @@ COptCCParams::COptCCParams(std::vector<unsigned char> &vch)
                     int i;
                     for (i = 1; i <= n; i++)
                     {
-                        vKeys.push_back(CPubKey(data[i]));
-                        if (!vKeys[vKeys.size() - 1].IsValid())
+                        std::vector<unsigned char> key = data[i];
+                        if (version == 2 && key.size() == 20)
+                        {
+                            vKeys.push_back(CKeyID(uint160(data[i])));
+                        }
+                        else if (key.size() == 33)
+                        {
+                            CPubKey key(data[i]);
+                            if (key.IsValid())
+                            {
+                                vKeys.push_back(CTxDestination(key));
+                            }
+                            else
+                            {
+                                version = 0;
+                                break;
+                            }
+                        }
+                        else
                         {
                             version = 0;
                             break;
                         }
+                        
                     }
                     if (version != 0)
                     {
@@ -110,13 +129,30 @@ std::vector<unsigned char> COptCCParams::AsVector()
     cData << std::vector<unsigned char>({version, evalCode, n, m});
     for (auto k : vKeys)
     {
-        cData << std::vector<unsigned char>(k.begin(), k.end());
+        cData << GetDestinationBytes(k);
     }
     for (auto d : vData)
     {
         cData << std::vector<unsigned char>(d);
     }
     return std::vector<unsigned char>(cData.begin(), cData.end());
+}
+
+bool IsPayToCryptoCondition(const CScript &scr, COptCCParams &ccParams)
+{
+    CScript subScript;
+    std::vector<std::vector<unsigned char>> vParams;
+    COptCCParams p;
+
+    if (scr.IsPayToCryptoCondition(&subScript, vParams))
+    {
+        if (!vParams.empty())
+        {
+            ccParams = COptCCParams(vParams[0]);
+        }
+        return true;
+    }
+    return false;
 }
 
 CScriptID::CScriptID(const CScript& in) : uint160(Hash160(in.begin(), in.end())) {}
@@ -195,9 +231,15 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, vector<vector<unsi
                     {
                         for (auto k : cp.vKeys)
                         {
-                            vSolutionsRet.push_back(std::vector<unsigned char>(k.begin(), k.end()));
+
+                            vSolutionsRet.push_back(GetDestinationBytes(k));
                         }
                     }
+                    else
+                    {
+                        return false;
+                    }
+                    
                 }
                 return true;
             }

@@ -52,6 +52,53 @@ public:
     std::string operator()(const CNoDestination& no) const { return {}; }
 };
 
+class DestinationBytes : public boost::static_visitor<std::vector<unsigned char>>
+{
+public:
+    DestinationBytes() {}
+
+    std::vector<unsigned char> operator()(const CKeyID& id) const
+    {
+        return std::vector<unsigned char>(id.begin(), id.end());
+    }
+
+    std::vector<unsigned char> operator()(const CPubKey& key) const
+    {
+        return std::vector<unsigned char>(key.begin(), key.end());
+    }
+
+    std::vector<unsigned char> operator()(const CScriptID& id) const
+    {
+        return std::vector<unsigned char>(id.begin(), id.end());
+    }
+
+    std::vector<unsigned char> operator()(const CNoDestination& no) const { return {}; }
+};
+
+class DestinationID : public boost::static_visitor<uint160>
+{
+public:
+    DestinationID() {}
+
+    uint160 operator()(const CKeyID& id) const
+    {
+
+        return (uint160)id;
+    }
+
+    uint160 operator()(const CPubKey& key) const
+    {
+        return (uint160)key.GetID();
+    }
+
+    uint160 operator()(const CScriptID& id) const
+    {
+        return (uint160)id;
+    }
+
+    uint160 operator()(const CNoDestination& no) const { return CKeyID(); }
+};
+
 CTxDestination DecodeDestination(const std::string& str, const CChainParams& params)
 {
     std::vector<unsigned char> data;
@@ -256,6 +303,16 @@ std::string EncodeExtKey(const CExtKey& key)
 std::string EncodeDestination(const CTxDestination& dest)
 {
     return boost::apply_visitor(DestinationEncoder(Params()), dest);
+}
+
+std::vector<unsigned char> GetDestinationBytes(const CTxDestination& dest)
+{
+    return boost::apply_visitor(DestinationBytes(), dest);
+}
+
+uint160 GetDestinationID(const CTxDestination dest)
+{
+    return boost::apply_visitor(DestinationID(), dest);
 }
 
 CTxDestination DecodeDestination(const std::string& str)

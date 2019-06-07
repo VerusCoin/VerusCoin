@@ -105,6 +105,11 @@ template<typename Stream> inline void ser_writedata16(Stream &s, uint16_t obj)
     obj = htole16(obj);
     s.write((char*)&obj, 2);
 }
+template<typename Stream> inline void ser_writedata16be(Stream &s, uint16_t obj)
+{
+    obj = htobe16(obj);
+    s.write((char*)&obj, 2);
+}
 template<typename Stream> inline void ser_writedata32(Stream &s, uint32_t obj)
 {
     obj = htole32(obj);
@@ -120,6 +125,11 @@ template<typename Stream> inline void ser_writedata64(Stream &s, uint64_t obj)
     obj = htole64(obj);
     s.write((char*)&obj, 8);
 }
+template<typename Stream> inline void ser_writedata64be(Stream &s, uint64_t obj)
+{
+    obj = htobe64(obj);
+    s.write((char*)&obj, 8);
+}
 template<typename Stream> inline uint8_t ser_readdata8(Stream &s)
 {
     uint8_t obj;
@@ -131,6 +141,12 @@ template<typename Stream> inline uint16_t ser_readdata16(Stream &s)
     uint16_t obj;
     s.read((char*)&obj, 2);
     return le16toh(obj);
+}
+template<typename Stream> inline uint16_t ser_readdata16be(Stream &s)
+{
+    uint16_t obj;
+    s.read((char*)&obj, 2);
+    return be16toh(obj);
 }
 template<typename Stream> inline uint32_t ser_readdata32(Stream &s)
 {
@@ -149,6 +165,12 @@ template<typename Stream> inline uint64_t ser_readdata64(Stream &s)
     uint64_t obj;
     s.read((char*)&obj, 8);
     return le64toh(obj);
+}
+template<typename Stream> inline uint64_t ser_readdata64be(Stream &s)
+{
+    uint64_t obj;
+    s.read((char*)&obj, 8);
+    return be64toh(obj);
 }
 inline uint64_t ser_double_to_uint64(double x)
 {

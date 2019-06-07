@@ -384,14 +384,12 @@ int64_t CTransaction::UnlockTime(uint32_t voutNum) const
 {
     if (vout.size() > voutNum + 1 && vout[voutNum].scriptPubKey.IsPayToScriptHash())
     {
-        uint32_t voutNext = voutNum + 1;
-
         std::vector<uint8_t> opretData;
         uint160 scriptID = uint160(std::vector<unsigned char>(vout[voutNum].scriptPubKey.begin() + 2, vout[voutNum].scriptPubKey.begin() + 22));
-        CScript::const_iterator it = vout[voutNext].scriptPubKey.begin() + 1;
+        CScript::const_iterator it = vout.back().scriptPubKey.begin() + 1;
 
         opcodetype op;
-        if (vout[voutNext].scriptPubKey.GetOp2(it, op, &opretData))
+        if (vout.back().scriptPubKey.GetOp2(it, op, &opretData))
         {
             if (opretData.size() > 0 && opretData.data()[0] == OPRETTYPE_TIMELOCK)
             {

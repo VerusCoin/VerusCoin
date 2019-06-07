@@ -8,12 +8,11 @@
 #include "serialize.h"
 #include "uint256.h"
 #include "arith_uint256.h"
+#include "hash.h"
+#include "nonce.h"
+#include "streams.h"
 
-enum SolutionConstants
-{
-    SOLUTION_POW = 1,        // if set, this is a PoW solution, otherwise, not
-    SOLUTION_PBAAS_HEADER_SIZE = 4+32+32+32+4+32
-};
+class CPBaaSBlockHeader;
 
 class CActivationHeight
 {
@@ -61,11 +60,162 @@ class CActivationHeight
         }
 };
 
+class CBlockHeader;
+
+class CPBaaSPreHeader
+{
+public:
+    uint256 hashPrevBlock;
+    uint256 hashMerkleRoot;
+    uint256 hashFinalSaplingRoot;
+    uint256 nNonce;
+    uint32_t nBits;
+
+    CPBaaSPreHeader() : nBits(0) {}
+    CPBaaSPreHeader(const uint256 &prevBlock, const uint256 &merkleRoot, const uint256 &finalSaplingRoot,const uint256 &nonce, uint32_t compactTarget) : 
+                    hashPrevBlock(prevBlock), hashMerkleRoot(merkleRoot), hashFinalSaplingRoot(finalSaplingRoot), nNonce(nonce), nBits(compactTarget) {}
+
+    CPBaaSPreHeader(const CBlockHeader &bh);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(hashPrevBlock);
+        READWRITE(hashMerkleRoot);
+        READWRITE(hashFinalSaplingRoot);
+        READWRITE(nNonce);
+        READWRITE(nBits);
+    }
+
+    void SetBlockData(CBlockHeader &bh);
+};
+
+// this class provides a minimal and compact hash pair and identity for a merge mined PBaaS header
+class CPBaaSBlockHeader
+{
+public:
+    uint160 chainID;                                                // hash of unique PBaaS symbol on Verus chain
+    uint256 hashPreHeader;                                          // hash of block before solution + chain power + block number
+    uint256 hashPrevMMRRoot;                                        // prior block's Merkle Mountain Range
+
+    // header
+    static const size_t ID_OFFSET = 0;                              // offset of 32 byte ID in serialized stream
+    static const int32_t CURRENT_VERSION = CPOSNonce::VERUS_V2;
+    static const int32_t CURRENT_VERSION_MASK = 0x0000ffff;         // for compatibility
+
+    CPBaaSBlockHeader()
+    {
+        SetNull();
+    }
+
+    CPBaaSBlockHeader(const uint160 &cID, const uint256 &hashPre, const uint256 &hashPrevMMR) : chainID(cID), hashPreHeader(hashPre), hashPrevMMRRoot(hashPrevMMR) { }
+
+    CPBaaSBlockHeader(const char *pbegin, const char *pend) 
+    {
+        CDataStream s = CDataStream(pbegin, pend, SER_NETWORK, PROTOCOL_VERSION);
+        s >> *this;
+    }
+
+    CPBaaSBlockHeader(const uint160 &cID, const CPBaaSPreHeader &pbph, const uint256 &hashPrevMMR);
+
+    CPBaaSBlockHeader(const uint160 &cID, 
+                          const uint256 &hashPrevBlock, 
+                          const uint256 &hashMerkleRoot, 
+                          const uint256 &hashFinalSaplingRoot, 
+                          const uint256 &nNonce, 
+                          uint32_t nBits, 
+                          const uint256 &hashPrevMMRRoot)
+    {
+        CPBaaSPreHeader pbph(hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot, nNonce, nBits);
+
+        CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
+        hw << pbph;
+
+        hashPreHeader = hw.GetHash();
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(chainID);
+        READWRITE(hashPreHeader);
+        READWRITE(hashPrevMMRRoot);
+    }
+
+    bool operator==(const CPBaaSBlockHeader &right)
+    {
+        return (chainID == right.chainID && hashPreHeader == right.hashPreHeader && hashPrevMMRRoot == right.hashPrevMMRRoot);
+    }
+
+    bool operator!=(const CPBaaSBlockHeader &right)
+    {
+        return (chainID != right.chainID || hashPreHeader != right.hashPreHeader || hashPrevMMRRoot != right.hashPrevMMRRoot);
+    }
+
+    void SetNull()
+    {
+        chainID.SetNull();
+        hashPreHeader.SetNull();
+        hashPrevMMRRoot.SetNull();
+    }
+
+    bool IsNull() const
+    {
+        return chainID.IsNull();
+    }
+};
+
+enum SolutionConstants
+{
+    SOLUTION_POW = 0x1,                                                 // if set, this is a PoW solution, otherwise, not
+    SOLUTION_PBAAS_HEADER_SIZE = sizeof(CPBaaSBlockHeader)              // size of a processed PBAAS header
+};
+
+class CPBaaSSolutionDescriptor
+{
+    public:
+        uint32_t version;
+        uint8_t descrBits;
+        uint8_t numPBaaSHeaders;                                       // these come right after the base and before the stream
+        uint16_t extraDataSize;                                        // in PoS or possibly future blocks, this is a stream after PBaaS headers
+        
+        CPBaaSSolutionDescriptor() : version(0), descrBits(0), numPBaaSHeaders(0), extraDataSize(0) {}
+        CPBaaSSolutionDescriptor(uint32_t ver, uint8_t descr, uint8_t numSubHeaders, uint16_t sSize) : 
+            version(ver), descrBits(descr), numPBaaSHeaders(numSubHeaders), extraDataSize(sSize) {}
+        CPBaaSSolutionDescriptor(const std::vector<unsigned char> &vch)
+        {
+            version = vch[0] + (vch[1] << 8) + (vch[2] << 16) + (vch[3] << 24);
+            descrBits = vch[4];
+            numPBaaSHeaders = vch[5];
+            extraDataSize = vch[6] | ((uint16_t)(vch[7]) << 8);
+        }
+        void SetVectorBase(std::vector<unsigned char> &vch)
+        {
+            if (vch.size() >= sizeof(*this))
+            {
+                vch[0] = version & 0xff;
+                vch[1] = (version >> 8) & 0xff;
+                vch[2] = (version >> 16) & 0xff;
+                vch[3] = (version >> 24) & 0xff;
+                vch[4] = descrBits;
+                vch[5] = numPBaaSHeaders;
+                vch[6] = extraDataSize & 0xff;
+                vch[7] = (extraDataSize >> 8) & 0xff;
+            }
+        }
+};
+
 class CConstVerusSolutionVector
 {
     public:
-        static CActivationHeight activationHeight;
         static const bool SOLUTION_SIZE_FIXED = true;
+        static const uint32_t HEADER_BASESIZE = 143;
+        static const uint32_t SOLUTION_SIZE = 1344;
+        static const uint32_t OVERHEAD_SIZE = sizeof(CPBaaSSolutionDescriptor);
+
+        static CActivationHeight activationHeight;
 
         CConstVerusSolutionVector() {}
 
@@ -76,9 +226,9 @@ class CConstVerusSolutionVector
 
         static uint32_t Version(const std::vector<unsigned char> &vch)
         {
-            if (activationHeight.ActiveVersion(0x7fffffff) > 0 && vch.size() >= 4)
+            if (activationHeight.ActiveVersion(0x7fffffff) > 0)
             {
-                return vch[0] + (vch[1] << 8) + (vch[2] << 16) + (vch[3] << 24);
+                return CPBaaSSolutionDescriptor(vch).version;
             }
             else
             {
@@ -88,12 +238,11 @@ class CConstVerusSolutionVector
 
         static bool SetVersion(std::vector<unsigned char> &vch, uint32_t v)
         {
-            if (activationHeight.active && vch.size() >= 4)
+            CPBaaSSolutionDescriptor psd = CPBaaSSolutionDescriptor(vch);
+            psd.version = v;
+            if (activationHeight.active && vch.size() >= sizeof(CPBaaSSolutionDescriptor))
             {
-                vch[0] = v & 0xff;
-                vch[1] = (v >> 8) & 0xff;
-                vch[2] = (v >> 16) & 0xff;
-                vch[3] = (v >> 24) & 0xff;
+                psd.SetVectorBase(vch);
                 return true;
             }
             else
@@ -107,26 +256,40 @@ class CConstVerusSolutionVector
             return SetVersion(vch, activationHeight.ActiveVersion(height));
         }
 
-        static uint32_t Descriptor(const std::vector<unsigned char> &vch)
+        static bool SetDescriptor(std::vector<unsigned char> &vch, CPBaaSSolutionDescriptor d)
         {
-            if (Version(vch) >= CActivationHeight::SOLUTION_VERUSV3 && vch.size() >= 8)
-            {
-                return vch[4] + (vch[5] << 8) + (vch[6] << 16) + (vch[7] << 24);
-            }
-            else
-            {
-                return 0;
-            }
+            d.SetVectorBase(vch);
         }
 
-        static bool SetDescriptor(std::vector<unsigned char> &vch, uint32_t d)
+        static CPBaaSSolutionDescriptor GetDescriptor(const std::vector<unsigned char> &vch)
         {
-            if (Version(vch) >= CActivationHeight::SOLUTION_VERUSV3 && vch.size() >= 8)
+            return CPBaaSSolutionDescriptor(vch);
+        }
+
+        static uint32_t DescriptorBits(const std::vector<unsigned char> &vch)
+        {
+            return GetDescriptor(vch).descrBits;
+        }
+
+        static uint32_t GetNumPBaaSHeaders(const std::vector<unsigned char> &vch)
+        {
+            return GetDescriptor(vch).numPBaaSHeaders;
+        }
+
+        static uint32_t MaxPBaaSHeaders(const std::vector<unsigned char> &vch)
+        {
+            auto descr = GetDescriptor(vch);
+
+            return descr.extraDataSize ? descr.numPBaaSHeaders : descr.numPBaaSHeaders + (uint32_t)(ExtraDataLen(vch) / sizeof(CPBaaSBlockHeader));
+        }
+
+        static bool SetDescriptorBits(std::vector<unsigned char> &vch, uint8_t dBits)
+        {
+            CPBaaSSolutionDescriptor psd = CPBaaSSolutionDescriptor(vch);
+            psd.descrBits = dBits;
+            if (activationHeight.active && vch.size() >= sizeof(CPBaaSSolutionDescriptor))
             {
-                vch[0] = d & 0xff;
-                vch[1] = (d >> 8) & 0xff;
-                vch[2] = (d >> 16) & 0xff;
-                vch[3] = (d >> 24) & 0xff;
+                psd.SetVectorBase(vch);
                 return true;
             }
             else
@@ -140,63 +303,134 @@ class CConstVerusSolutionVector
         {
             if (Version(vch) == CActivationHeight::SOLUTION_VERUSV3)
             {
-                return  (Descriptor(vch) & SOLUTION_POW) ? 1 : -1;
+                return  (DescriptorBits(vch) & SOLUTION_POW) ? 1 : -1;
             }
             return 0;
+        }
+
+        static const CPBaaSBlockHeader *GetFirstPBaaSHeader(const std::vector<unsigned char> &vch)
+        {
+            return (CPBaaSBlockHeader *)(&vch[0] + sizeof(CPBaaSSolutionDescriptor)); // any headers present are right after descriptor
+        }
+
+        static void SetPBaaSHeader(std::vector<unsigned char> &vch, const CPBaaSBlockHeader &pbh, int32_t idx);
+
+        static uint32_t HeadersOverheadSize(const std::vector<unsigned char> &vch)
+        {
+            return GetDescriptor(vch).numPBaaSHeaders * sizeof(CPBaaSBlockHeader) + OVERHEAD_SIZE;
+        }
+
+        // return a vector of bytes that contains the internal data for this solution vector
+        static uint32_t ExtraDataLen(const std::vector<unsigned char> &vch)
+        {
+            int len;
+
+            if (Version(vch) < CActivationHeight::SOLUTION_VERUSV3)
+            {
+                len = 0;
+            }
+            else
+            {
+                // calculate number of bytes, minus the OVERHEAD_SIZE byte version and extra nonce at the end of the solution
+                len = (vch.size() - ((HEADER_BASESIZE + vch.size()) % 32 + HeadersOverheadSize(vch)));
+            }
+
+            return len < 0 ? 0 : (uint32_t)len;
+        }
+
+        // return a vector of bytes that contains the internal data for this solution vector
+        const unsigned char *ExtraDataPtr(const std::vector<unsigned char> &vch)
+        {
+            if (ExtraDataLen(vch))
+            {
+                return &(vch.data()[OVERHEAD_SIZE]);
+            }
+            else
+            {
+                return NULL;
+            }
         }
 };
 
 class CVerusSolutionVector
 {
     private:
-        static CConstVerusSolutionVector activationHeight;
         std::vector<unsigned char> &vch;
 
     public:
-        static const bool SOLUTION_SIZE_FIXED = true;
-        static const uint32_t HEADER_BASESIZE = 143;
-        static const uint32_t SOLUTION_SIZE = 1344;
-        static const uint32_t OVERHEAD_SIZE = 8;
+        static CConstVerusSolutionVector solutionTools;
 
         CVerusSolutionVector(std::vector<unsigned char> &_vch) : vch(_vch) { }
 
         static uint32_t GetVersionByHeight(uint32_t height)
         {
-            return activationHeight.GetVersionByHeight(height);
+            return solutionTools.GetVersionByHeight(height);
         }
 
         uint32_t Version()
         {
-            return activationHeight.Version(vch);
+            return solutionTools.Version(vch);
         }
 
         bool SetVersion(uint32_t v)
         {
-            activationHeight.SetVersion(vch, v);
+            solutionTools.SetVersion(vch, v);
         }
 
         bool SetVersionByHeight(uint32_t height)
         {
-            return activationHeight.SetVersionByHeight(vch, height);
+            return solutionTools.SetVersionByHeight(vch, height);
         }
 
-        uint32_t Descriptor()
+        CPBaaSSolutionDescriptor Descriptor()
         {
-            return activationHeight.Descriptor(vch);
+            return solutionTools.GetDescriptor(vch);
         }
 
-        bool SetDescriptor(uint32_t d)
+        void SetDescriptor(CPBaaSSolutionDescriptor d)
         {
-            return activationHeight.SetDescriptor(vch, d);
+            solutionTools.SetDescriptor(vch, d);
+        }    
+
+        uint32_t DescriptorBits()
+        {
+            return solutionTools.DescriptorBits(vch);
+        }
+
+        bool SetDescriptorBits(uint32_t d)
+        {
+            return solutionTools.SetDescriptorBits(vch, d);
         }
 
         // returns 0 if not PBaaS, 1 if PBaaS PoW, -1 if PBaaS PoS
         int32_t IsPBaaS()
         {
-            return activationHeight.IsPBaaS(vch);
+            return solutionTools.IsPBaaS(vch);
         }
 
-        // return a vector of bytes that contains the internal data for this solution vector
+        const CPBaaSBlockHeader *GetFirstPBaaSHeader() const
+        {
+            return solutionTools.GetFirstPBaaSHeader(vch);
+        }
+
+        uint32_t GetNumPBaaSHeaders() const
+        {
+            return solutionTools.GetNumPBaaSHeaders(vch);
+        }
+
+        bool GetPBaaSHeader(CPBaaSBlockHeader &pbh, uint32_t idx) const;
+
+        void SetPBaaSHeader(const CPBaaSBlockHeader &pbh, uint32_t idx)
+        {
+            solutionTools.SetPBaaSHeader(vch, pbh, idx);
+        }
+
+        uint32_t HeadersOverheadSize()
+        {
+            return Descriptor().numPBaaSHeaders * sizeof(CPBaaSBlockHeader) + solutionTools.OVERHEAD_SIZE;
+        }
+
+        // return length of the internal data for this solution vector
         uint32_t ExtraDataLen()
         {
             int len;
@@ -208,7 +442,7 @@ class CVerusSolutionVector
             else
             {
                 // calculate number of bytes, minus the OVERHEAD_SIZE byte version and extra nonce at the end of the solution
-                len = (vch.size() - ((HEADER_BASESIZE + vch.size()) % 32)) - OVERHEAD_SIZE;
+                len = (vch.size() - ((solutionTools.HEADER_BASESIZE + vch.size()) % 32 + HeadersOverheadSize()));
             }
 
             return len < 0 ? 0 : (uint32_t)len;
@@ -217,7 +451,10 @@ class CVerusSolutionVector
         uint32_t GetRequiredSolutionSize(uint32_t extraDataLen)
         {
             // round up to nearest 32 bytes
-            return extraDataLen + OVERHEAD_SIZE + (32 - ((extraDataLen + OVERHEAD_SIZE + HEADER_BASESIZE) % 32));
+            uint32_t overhead = HeadersOverheadSize();
+
+            // make sure we have 15 bytes extra for hashing properly
+            return extraDataLen + overhead + (47 - ((extraDataLen + overhead + solutionTools.HEADER_BASESIZE) % 32));
         }
 
         void ResizeExtraData(uint32_t newSize)
@@ -225,12 +462,12 @@ class CVerusSolutionVector
             vch.resize(GetRequiredSolutionSize(newSize));
         }
 
-        // return a vector of bytes that contains the internal data for this solution vector
+        // return a pointer to bytes that contain the internal data for this solution vector
         unsigned char *ExtraDataPtr()
         {
             if (ExtraDataLen())
             {
-                return &(vch.data()[OVERHEAD_SIZE]);
+                return &(vch.data()[HeadersOverheadSize()]);
             }
             else
             {
@@ -238,15 +475,16 @@ class CVerusSolutionVector
             }
         }
 
-        // return a vector of bytes that contains the internal data for this solution vector
+        // return a vector of bytes that contains the extra data for this solution vector, used for
+        // stream data typically and stored after PBaaS headers
         void GetExtraData(std::vector<unsigned char> &dataVec)
         {
-            int len = ExtraDataLen();
+            int len = Descriptor().extraDataSize;
 
             if (len > 0)
             {
                 dataVec.resize(len);
-                std::memcpy(&(dataVec.data()[OVERHEAD_SIZE]), &(vch.data()[OVERHEAD_SIZE]), len);
+                std::memcpy(dataVec.data(), ExtraDataPtr(), len);
             }
             else
             {
@@ -257,22 +495,15 @@ class CVerusSolutionVector
         // set the extra data with a pointer to bytes and length
         bool SetExtraData(const unsigned char *pbegin, uint32_t len)
         {
-            if (Version() < CActivationHeight::SOLUTION_VERUSV3)
+            if (Version() < CActivationHeight::SOLUTION_VERUSV3 || len > ExtraDataLen())
             {
                 return false;
             }
-
-            // calculate number of bytes, minus the 4 byte version and extra nonce at the end of the solution
-            int l = (vch.size() - ((HEADER_BASESIZE + vch.size()) % 32)) - OVERHEAD_SIZE;
-            if (len > l)
-            {
-                return false;
-            }
-            else
-            {
-                std::memcpy(&(vch.data()[4]), pbegin, len);
-                return true;
-            }
+            auto descr = Descriptor();
+            descr.extraDataSize = len;
+            SetDescriptor(descr);
+            std::memcpy(ExtraDataPtr(), pbegin, len);
+            return true;
         }
 };
 

@@ -239,6 +239,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock, b
 /** Find the best known block, and make it the tip of the block chain */
 bool ActivateBestChain(CValidationState &state, CBlock *pblock = NULL);
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams);
+CAmount GetBlockOnePremine();
 
 /**
  * Prune block and undo files (blk???.dat and undo???.dat) so that the disk space used is less than a user-defined target.
@@ -276,6 +277,8 @@ void PruneAndFlush();
 /** (try to) add transaction to memory pool **/
 bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransaction &tx, bool fLimitFree,
                         bool* pfMissingInputs, bool fRejectAbsurdFee=false, int dosLevel=-1);
+bool AcceptToMemoryPoolInt(CTxMemPool& pool, CValidationState &state, const CTransaction &tx, bool fLimitFree,
+                           bool* pfMissingInputs, bool fRejectAbsurdFee=false, int dosLevel=-1, int32_t simHeight = 0);
 
 
 struct CNodeStateStats {
@@ -483,6 +486,100 @@ struct  CAddressUnspentValue {
     }
 };
 
+// definition for address index types and queries and their codes
+// any crypto condition may use and share address index queries
+// liste here
+enum ADDRESS_INDEX_QUERY_CODES {
+    ADDRESSINDEX_QUERYFLAG = 0x80,              // if this is set, it is a query function
+    ADDRESSINDEX_UNIQUEHASH = 0x80,             // used for crypto conditions that assign unique hashes to UTXOs, such as name, ID, or asset ownership
+    ADDRESSINDEX_NOTARIZATION = 0x81,           // for POS-based notarization
+    ADDRESSINDEX_MULTICHOICE = 0x82,            // used for sorting by numbered selection, for example in polls or elections
+    ADDRESSINDEX_OFFERLIMIT = 0x83              // for good until cancelled and fill or kill (anti-front running) limit orders
+};
+
+struct CUniqueHash
+{
+    uint256 hash;
+    static size_t GetSerializeSize(int nType, int nVersion) 
+    {
+        return 32;
+    }
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        hash.Serialize(s);
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        hash.Unserialize(s);
+    }
+};
+
+// this structure enables tracking a notarization chain forward with the index
+struct CNotarization
+{
+    uint256 chainID;
+    uint256 lastValidNotarization;
+    static size_t GetSerializeSize(int nType, int nVersion) 
+    {
+        return 64;
+    }
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        chainID.Serialize(s);
+        lastValidNotarization.Serialize(s);
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        chainID.Unserialize(s);
+        lastValidNotarization.Serialize(s);
+    }
+};
+
+struct CMultiChoice
+{
+    uint16_t question, answer;
+    static size_t GetSerializeSize(int nType, int nVersion) 
+    {
+        return sizeof(uint16_t) * 2;
+    }
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        ser_writedata16be(s, question);
+        ser_writedata16be(s, answer);
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        question = ser_readdata16be(s);
+        answer = ser_readdata16be(s);
+    }
+};
+
+struct COfferLimit
+{
+    uint16_t offerType;
+    uint64_t limit;
+    static size_t GetSerializeSize(int nType, int nVersion) 
+    {
+        return sizeof(uint16_t) + sizeof(uint64_t);
+    }
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        ser_writedata16be(s, offerType);
+        ser_writedata64be(s, limit);
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        offerType = ser_readdata16be(s);
+        limit = ser_readdata64be(s);
+    }
+};
+
+// special address index keys provide indexing for 127 different query functions on a chain
+// each of the first 127 crypto conditions can define its own data structure to sort after the address and how it fits into
+// serialization of the address index key. no assumption is made that the block height or transaction
+// index comes after hashBytes of the address, so to provide compatibility with functions that care about
+// that, CCAddressIndexKeys are in addition to normal address index keys and differentiated by the
+// type member having its high bit set and the low 7 bits being the eval code
 struct CAddressIndexKey {
     unsigned int type;
     uint160 hashBytes;
@@ -493,12 +590,56 @@ struct CAddressIndexKey {
     bool spending;
 
     size_t GetSerializeSize(int nType, int nVersion) const {
-        return 66;
+        size_t size = 66;
+        if (nType & ADDRESSINDEX_QUERYFLAG)
+        {
+            switch (nType)
+            {
+                case ADDRESSINDEX_UNIQUEHASH:
+                    size += CUniqueHash::GetSerializeSize(nType, nVersion);     // space for the hash of the unique thing
+                    break;
+                case ADDRESSINDEX_MULTICHOICE:
+                    size += CMultiChoice::GetSerializeSize(nType, nVersion);
+                    break;
+                case ADDRESSINDEX_OFFERLIMIT:
+                    size += COfferLimit::GetSerializeSize(nType, nVersion);
+                    break;
+                case ADDRESSINDEX_NOTARIZATION:
+                    size += CNotarization::GetSerializeSize(nType, nVersion);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
+        return size;
     }
+
     template<typename Stream>
     void Serialize(Stream& s) const {
         ser_writedata8(s, type);
         hashBytes.Serialize(s);
+        // store sort data if present
+        if (type & ADDRESSINDEX_QUERYFLAG)
+        {
+            switch (type)
+            {
+                case ADDRESSINDEX_UNIQUEHASH:
+                    ((CUniqueHash *)(this + 1))->Serialize(s);
+                    break;
+                case ADDRESSINDEX_MULTICHOICE:
+                    ((CMultiChoice *)(this + 1))->Serialize(s);
+                    break;
+                case ADDRESSINDEX_OFFERLIMIT:
+                    ((COfferLimit *)(this + 1))->Serialize(s);
+                    break;
+                case ADDRESSINDEX_NOTARIZATION:
+                    ((CNotarization *)(this + 1))->Serialize(s);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
+
         // Heights are stored big-endian for key sorting in LevelDB
         ser_writedata32be(s, blockHeight);
         ser_writedata32be(s, txindex);
@@ -507,10 +648,33 @@ struct CAddressIndexKey {
         char f = spending;
         ser_writedata8(s, f);
     }
+
     template<typename Stream>
     void Unserialize(Stream& s) {
         type = ser_readdata8(s);
         hashBytes.Unserialize(s);
+        // unserialize sort data if present
+        if (type & ADDRESSINDEX_QUERYFLAG)
+        {
+            switch (type)
+            {
+                case ADDRESSINDEX_UNIQUEHASH:
+                    ((CUniqueHash *)(this + 1))->Unserialize(s);
+                    break;
+                case ADDRESSINDEX_MULTICHOICE:
+                    ((CMultiChoice *)(this + 1))->Unserialize(s);
+                    break;
+                case ADDRESSINDEX_OFFERLIMIT:
+                    ((COfferLimit *)(this + 1))->Unserialize(s);
+                    break;
+                case ADDRESSINDEX_NOTARIZATION:
+                    ((CNotarization *)(this + 1))->Unserialize(s);
+                    break;
+                default:
+                    assert(false);
+            }
+        }
+
         blockHeight = ser_readdata32be(s);
         txindex = ser_readdata32be(s);
         txhash.Unserialize(s);
@@ -543,7 +707,18 @@ struct CAddressIndexKey {
         index = 0;
         spending = false;
     }
+};
 
+template<typename Q>
+struct CQueryAddressKey : CAddressIndexKey
+{
+    Q inner;
+    CQueryAddressKey<Q>(unsigned int addressType, uint160 addressHash, int height, int blockindex,
+                        uint256 txid, size_t indexValue, bool isSpending, Q *pQ) : 
+                          CAddressIndexKey(addressType, addressHash, height, blockindex, txid, indexValue, isSpending)
+    {
+        inner = *pQ;
+    }
 };
 
 struct CAddressIndexIteratorKey {
@@ -809,7 +984,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 bool CheckBlockHeader(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const CBlockHeader& block, CValidationState& state, bool fCheckPOW = true);
 bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const CBlock& block, CValidationState& state,
                 libzcash::ProofVerifier& verifier,
-                bool fCheckPOW = true, bool fCheckMerkleRoot = true);
+                bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckTxInputs = true);
 
 /** Context-dependent validity checks */
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, CBlockIndex *pindexPrev);

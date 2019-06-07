@@ -31,6 +31,9 @@
 #include "CCPayments.h"
 #include "CCGateways.h"
 #include "StakeGuard.h"
+#include "pbaas/crosschainrpc.h"
+#include "pbaas/pbaas.h"
+#include "pbaas/notarization.h"
 
 /*
  CCcustom has most of the functions that need to be extended to create a new CC contract.
@@ -60,6 +63,46 @@
 std::string StakeGuardAddr = "RCG8KwJNDVwpUBcdoa6AoHqHVJsA1uMYMR";
 std::string StakeGuardPubKey = "03166b7813a4855a88e9ef7340a692ef3c2decedfdc2c7563ec79537e89667d935";
 std::string StakeGuardWIF = "Uw7vRYHGKjyi1FaJ8Lv1USSuj7ntUti8fAhSDiCdbzuV6yDagaTn";
+
+// defines the currency characteristics of a PBaaS currency that will be the native coins of a PBaaS chain
+std::string PBaaSDefinitionAddr = "RP7id3CzCnwvzNUZesYJM6ekvsxpEzMqB1";
+std::string PBaaSDefinitionPubKey = "02a0de91740d3d5a3a4a7990ae22315133d02f33716b339ebce88662d012224ef5";
+std::string PBaaSDefinitionWIF = "UwhNWARAQTUvYUEqxGbRjM2BFUneGnFzmaMMiSqJQZFQZTku6xTW";
+
+// StakeGuard - nothing at stake
+std::string EarnedNotarizationAddr = "RMYbaxFsCT1xfMmwLCCYAVf2DsxcDTtBmx";
+std::string EarnedNotarizationPubKey = "03fb008879b37d644bef929576dda7f5ee31b352c76fc112b4a89838d5b61f52e2";
+std::string EarnedNotarizationWIF = "UtzhFWXw24xS2Tf3gCDm9p2Ex7TUnCNt4DFA7r2f5cCKPhPknEqD";
+
+// StakeGuard - nothing at stake
+std::string AcceptedNotarizationAddr = "RDTq9qn1Lthv7fvsdbWz36mGp8HK9XaruZ";
+std::string AcceptedNotarizationPubKey = "02d85f078815b7a52faa92639c3691d2a640e26c4e06de54dd1490f0e93bcc11c3";
+std::string AcceptedNotarizationWIF = "UtgbVEYs2PShTMffbkYh8bgo9DYsXr8JuqWVjAYHRt2ebGPeP5Mf";
+
+// StakeGuard - nothing at stake
+std::string FinalizeNotarizationAddr = "RRbKYitLH9EhQCvCo4bPZqJx3TWxASadxE";
+std::string FinalizeNotarizationPubKey = "02e3154f8122ff442fbca3ff8ff4d4fb2d9285fd9f4d841d58fb8d6b7acefed60f";
+std::string FinalizeNotarizationWIF = "UrN1b1hCQc6cUpcUdQD7DFTn2PJneDpKv5pmURPQzJ2zVp9UVM6E";
+
+// StakeGuard - nothing at stake
+std::string ServiceRewardAddr = "RQWMeecjGFF3ZAVeSimRbyG9iMDUHPY5Ny";
+std::string ServiceRewardPubKey = "03e1894e9d487125be5a8c6657a8ce01bc81ba7816d698dbfcfb0483754eb5a2d9";
+std::string ServiceRewardWIF = "Uw5dNvvgz7eyUJGtfi696hYbF9YPXHPHasgZFeQeDu8j4SapPBzd";
+
+// StakeGuard - nothing at stake
+std::string ReserveOutputAddr = "RMXeZGxxRuABFkT4uLSCeuJHLegBNGZq8D";
+std::string ReserveOutputPubKey = "02d3e0f4c308c6e9786a5280ec96ea6d0e07505bae88d28b4b3156c309e2ae5515";
+std::string ReserveOutputWIF = "UrCfRxuFKPg3b3HtPFhvL9X8iePfETRZpgymrxzdDZ3vpjSwHrxH";
+
+// StakeGuard - nothing at stake
+std::string ReserveExportAddr = "RTqQe58LSj2yr5CrwYFwcsAQ1edQwmrkUU";
+std::string ReserveExportPubKey = "0367add5577ca8f5f680ee0adf4cf802584c56ed14956efedd3e18656874614548";
+std::string ReserveExportWIF = "UtbtjjXtNtYroASwDrW63pEK7Fv3ehBRGDc2GRkPPr292DkRTmtB";
+
+// StakeGuard - nothing at stake
+std::string ReserveImportAddr = "";
+std::string ReserveImportPubKey = "";
+std::string ReserveImportWIF = "";
 
 // Assets, aka Tokens
 #define FUNCNAME IsAssetsInput
@@ -239,7 +282,60 @@ struct CCcontract_info *CCinit(struct CCcontract_info *cp, uint8_t evalcode)
             strcpy(cp->CChexstr,StakeGuardPubKey.c_str());
             memcpy(cp->CCpriv,DecodeSecret(StakeGuardWIF).begin(),32);
             cp->validate = StakeGuardValidate;
-            cp->ismyvin = IsStakeGuardInput;
+            cp->ismyvin = IsStakeGuardInput;  // TODO: these input functions are not correct and should be as above with FUNCNAME/EVALCODE
+            break;
+
+        case EVAL_PBAASDEFINITION:
+            strcpy(cp->unspendableCCaddr,PBaaSDefinitionAddr.c_str());
+            strcpy(cp->normaladdr,PBaaSDefinitionAddr.c_str());
+            strcpy(cp->CChexstr,PBaaSDefinitionPubKey.c_str());
+            memcpy(cp->CCpriv,DecodeSecret(PBaaSDefinitionWIF).begin(),32);
+            cp->validate = ValidateChainDefinition;
+            cp->ismyvin = IsChainDefinitionInput;
+            break;
+
+        case EVAL_EARNEDNOTARIZATION:
+            strcpy(cp->unspendableCCaddr,EarnedNotarizationAddr.c_str());
+            strcpy(cp->normaladdr,EarnedNotarizationAddr.c_str());
+            strcpy(cp->CChexstr,EarnedNotarizationPubKey.c_str());
+            memcpy(cp->CCpriv,DecodeSecret(EarnedNotarizationWIF).begin(),32);
+            cp->validate = ValidateEarnedNotarization;
+            cp->ismyvin = IsEarnedNotarizationInput;
+            break;
+
+        case EVAL_ACCEPTEDNOTARIZATION:
+            strcpy(cp->unspendableCCaddr,AcceptedNotarizationAddr.c_str());
+            strcpy(cp->normaladdr,AcceptedNotarizationAddr.c_str());
+            strcpy(cp->CChexstr,AcceptedNotarizationPubKey.c_str());
+            memcpy(cp->CCpriv,DecodeSecret(AcceptedNotarizationWIF).begin(),32);
+            cp->validate = ValidateAcceptedNotarization;
+            cp->ismyvin = IsAcceptedNotarizationInput;
+            break;
+
+        case EVAL_FINALIZENOTARIZATION:
+            strcpy(cp->unspendableCCaddr,FinalizeNotarizationAddr.c_str());
+            strcpy(cp->normaladdr,FinalizeNotarizationAddr.c_str());
+            strcpy(cp->CChexstr,FinalizeNotarizationPubKey.c_str());
+            memcpy(cp->CCpriv,DecodeSecret(FinalizeNotarizationWIF).begin(),32);
+            cp->validate = ValidateFinalizeNotarization;
+            cp->ismyvin = IsFinalizeNotarizationInput;
+            break;
+
+        case EVAL_SERVICEREWARD:
+            strcpy(cp->unspendableCCaddr,ServiceRewardAddr.c_str());
+            strcpy(cp->normaladdr,ServiceRewardAddr.c_str());
+            strcpy(cp->CChexstr,ServiceRewardPubKey.c_str());
+            memcpy(cp->CCpriv,DecodeSecret(ServiceRewardWIF).begin(),32);
+            cp->validate = ValidateServiceReward;
+            cp->ismyvin = IsServiceRewardInput;
+            break;
+
+        case EVAL_INSTANTSPEND:
+        case EVAL_CROSSCHAIN_INPUT:
+        case EVAL_CROSSCHAIN_OUTPUT:
+        case EVAL_CROSSCHAIN_IMPORT:
+        case EVAL_CROSSCHAIN_EXPORT:
+            assert(false);
             break;
 
         case EVAL_ASSETS:
@@ -362,7 +458,7 @@ struct CCcontract_info *CCinit(struct CCcontract_info *cp, uint8_t evalcode)
             cp->validate = GatewaysValidate;
             cp->ismyvin = IsGatewaysInput;
             break;
+
     }
     return(cp);
 }
-

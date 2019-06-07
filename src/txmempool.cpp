@@ -131,37 +131,41 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
     std::vector<CMempoolAddressDeltaKey> inserted;
 
     uint256 txhash = tx.GetHash();
-    for (unsigned int j = 0; j < tx.vin.size(); j++) {
-        const CTxIn input = tx.vin[j];
-        const CTxOut &prevout = view.GetOutputFor(input);
-        if (prevout.scriptPubKey.IsPayToScriptHash()) {
-            vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+2, prevout.scriptPubKey.begin()+22);
-            CMempoolAddressDeltaKey key(2, uint160(hashBytes), txhash, j, 1);
-            CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
-            mapAddress.insert(make_pair(key, delta));
-            inserted.push_back(key);
-        }
-        else if (prevout.scriptPubKey.IsPayToPublicKeyHash()) {
-            vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+3, prevout.scriptPubKey.begin()+23);
-            CMempoolAddressDeltaKey key(1, uint160(hashBytes), txhash, j, 1);
-            CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
-            mapAddress.insert(make_pair(key, delta));
-            inserted.push_back(key);
-        }
-        else if (prevout.scriptPubKey.IsPayToPublicKey()) {
-            vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+1, prevout.scriptPubKey.begin()+34);
-            CMempoolAddressDeltaKey key(1, Hash160(hashBytes), txhash, j, 1);
-            CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
-            mapAddress.insert(make_pair(key, delta));
-            inserted.push_back(key);
-        }
-        else if (prevout.scriptPubKey.IsPayToCryptoCondition()) {
-            vector<unsigned char> hashBytes(prevout.scriptPubKey.begin(), prevout.scriptPubKey.end());
-            CMempoolAddressDeltaKey key(1, Hash160(hashBytes), txhash, j, 1);
-            CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
-            mapAddress.insert(make_pair(key, delta));
-            inserted.push_back(key);
-        }   }
+
+    if (!tx.IsCoinBase())
+    {
+        for (unsigned int j = 0; j < tx.vin.size(); j++) {
+            const CTxIn input = tx.vin[j];
+            const CTxOut &prevout = view.GetOutputFor(input);
+            if (prevout.scriptPubKey.IsPayToScriptHash()) {
+                vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+2, prevout.scriptPubKey.begin()+22);
+                CMempoolAddressDeltaKey key(2, uint160(hashBytes), txhash, j, 1);
+                CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
+                mapAddress.insert(make_pair(key, delta));
+                inserted.push_back(key);
+            }
+            else if (prevout.scriptPubKey.IsPayToPublicKeyHash()) {
+                vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+3, prevout.scriptPubKey.begin()+23);
+                CMempoolAddressDeltaKey key(1, uint160(hashBytes), txhash, j, 1);
+                CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
+                mapAddress.insert(make_pair(key, delta));
+                inserted.push_back(key);
+            }
+            else if (prevout.scriptPubKey.IsPayToPublicKey()) {
+                vector<unsigned char> hashBytes(prevout.scriptPubKey.begin()+1, prevout.scriptPubKey.begin()+34);
+                CMempoolAddressDeltaKey key(1, Hash160(hashBytes), txhash, j, 1);
+                CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
+                mapAddress.insert(make_pair(key, delta));
+                inserted.push_back(key);
+            }
+            else if (prevout.scriptPubKey.IsPayToCryptoCondition()) {
+                vector<unsigned char> hashBytes(prevout.scriptPubKey.begin(), prevout.scriptPubKey.end());
+                CMempoolAddressDeltaKey key(1, Hash160(hashBytes), txhash, j, 1);
+                CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
+                mapAddress.insert(make_pair(key, delta));
+                inserted.push_back(key);
+            }   }
+    }
 
     for (unsigned int k = 0; k < tx.vout.size(); k++) {
         const CTxOut &out = tx.vout[k];
@@ -365,8 +369,10 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
 {
     // Remove transactions spending a coinbase which are now immature
     extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
         COINBASE_MATURITY = _COINBASE_MATURITY;
+
     // Remove transactions spending a coinbase which are now immature and no-longer-final transactions
     LOCK(cs);
     list<CTransaction> transactionsToRemove;
@@ -381,9 +387,11 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
                     continue;
                 const CCoins *coins = pcoins->AccessCoins(txin.prevout.hash);
 		        if (nCheckFrequency != 0) assert(coins);
-                if (!coins || (coins->IsCoinBase() && (((signed long)nMemPoolHeight) - coins->nHeight < COINBASE_MATURITY) && 
-                                                       ((signed long)nMemPoolHeight < komodo_block_unlocktime(coins->nHeight) && 
-                                                         coins->IsAvailable(0) && coins->vout[0].nValue >= ASSETCHAINS_TIMELOCKGTE))) {
+
+                if (!coins || (coins->IsCoinBase() &&
+                               (((signed long)nMemPoolHeight) - coins->nHeight < COINBASE_MATURITY) || 
+                                    ((signed long)nMemPoolHeight < komodo_block_unlocktime(coins->nHeight) && 
+                                        coins->IsAvailable(0) && coins->vout[0].nValue >= ASSETCHAINS_TIMELOCKGTE))) {
                     transactionsToRemove.push_back(tx);
                     break;
                 }

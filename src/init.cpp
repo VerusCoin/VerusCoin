@@ -28,6 +28,7 @@
 #include "miner.h"
 #include "net.h"
 #include "rpc/server.h"
+#include "rpc/pbaasrpc.h"
 #include "rpc/register.h"
 #include "script/standard.h"
 #include "scheduler.h"
@@ -207,6 +208,7 @@ void Shutdown()
     if (pwalletMain)
         pwalletMain->Flush(false);
 #endif
+
 #ifdef ENABLE_MINING
  #ifdef ENABLE_WALLET
     GenerateBitcoins(false, NULL, 0);
@@ -214,6 +216,7 @@ void Shutdown()
     GenerateBitcoins(false, 0);
  #endif
 #endif
+
     StopNode();
     StopTorControl();
     UnregisterNodeSignals(GetNodeSignals());
@@ -781,7 +784,7 @@ bool AppInitServers(boost::thread_group& threadGroup)
  */
 extern int32_t KOMODO_REWIND;
 
-bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
+bool AppInitNetworking()
 {
     // ********************************************************* Step 1: setup
 #ifdef _MSC_VER
@@ -809,7 +812,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if (!SetupNetworking())
         return InitError("Error: Initializing networking failed");
+    
+    return true;
+}
 
+bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
+{
 #ifndef _WIN32
     if (GetBoolArg("-sysperms", false)) {
 #ifdef ENABLE_WALLET

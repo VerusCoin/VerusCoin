@@ -54,8 +54,6 @@ extern uint32_t ASSETCHAINS_CC;
 extern std::string CCerror;
 
 #define SMALLVAL 0.000000000000001
-union _bits256 { uint8_t bytes[32]; uint16_t ushorts[16]; uint32_t uints[8]; uint64_t ulongs[4]; uint64_t txid; };
-typedef union _bits256 bits256;
 
 struct CC_utxo
 {
@@ -101,7 +99,7 @@ bool GetAddressUnspent(uint160 addressHash, int type,std::vector<std::pair<CAddr
 static const uint256 zeroid;
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock);
 int32_t is_hexstr(char *str,int32_t n);
-bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL);
+bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, int32_t simHeight = 0, bool *missinginputs = NULL);
 //uint64_t myGettxout(uint256 hash,int32_t n);
 bool myIsutxo_spentinmempool(uint256 txid,int32_t vout);
 int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout);

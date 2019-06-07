@@ -20,6 +20,11 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "uint256.h"
+
+#include "cc/CCinclude.h"
+#include "cc/eval.h"
+#include "pbaas/notarization.h"
+
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
@@ -334,6 +339,65 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
         out.push_back(Pair("scriptPubKey", o));
         vout.push_back(out);
+        COptCCParams p;
+        if (IsPayToCryptoCondition(txout.scriptPubKey, p) && p.version >= COptCCParams::VERSION_V2)
+        {
+            switch(p.evalCode)
+            {
+                case EVAL_PBAASDEFINITION:
+                {
+                    CPBaaSChainDefinition definition;
+
+                    if (p.vData.size() && (definition = CPBaaSChainDefinition(p.vData[0])).IsValid())
+                    {
+                        out.push_back(Pair("pbaasChainDefinition", definition.ToUniValue()));
+                    }
+                    break;
+                }
+
+                case EVAL_SERVICEREWARD:
+                {
+                    CServiceReward reward;
+
+                    if (p.vData.size() && (reward = CServiceReward(p.vData[0])).IsValid())
+                    {
+                        out.push_back(Pair("pbaasServiceReward", reward.ToUniValue()));
+                    }
+                    break;
+                }
+
+                case EVAL_EARNEDNOTARIZATION:
+                case EVAL_ACCEPTEDNOTARIZATION:
+                {
+                    CPBaaSNotarization notarization;
+
+                    if (p.vData.size() && (notarization = CPBaaSNotarization(p.vData[0])).IsValid())
+                    {
+                        out.push_back(Pair("pbaasNotarization", notarization.ToUniValue()));
+                    }
+                    break;
+                }
+
+                case EVAL_FINALIZENOTARIZATION:
+                {
+                    CNotarizationFinalization finalization;
+
+                    if (p.vData.size() && (finalization = CNotarizationFinalization(p.vData[0])).IsValid())
+                    {
+                        out.push_back(Pair("pbaasFinalization", finalization.ToUniValue()));
+                    }
+                    break;
+                }
+
+                case EVAL_INSTANTSPEND:
+                case EVAL_CROSSCHAIN_INPUT:
+                case EVAL_CROSSCHAIN_OUTPUT:
+                case EVAL_CROSSCHAIN_EXPORT:
+                case EVAL_CROSSCHAIN_IMPORT:
+                case EVAL_STAKEGUARD:
+                    break;
+            }
+        }
     }
     entry.push_back(Pair("vout", vout));
 

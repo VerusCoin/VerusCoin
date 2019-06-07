@@ -1052,6 +1052,7 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptCoinbase=false) {
         }
 
         // By default we ignore coinbase outputs
+        // TODO: audit use of fAcceptCoinbase to ensure that when coinbase is not required to be shielded that this is skipped
         bool isCoinbase = out.tx->IsCoinBase();
         if (isCoinbase && fAcceptCoinbase==false) {
             continue;

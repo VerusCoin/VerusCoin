@@ -6,7 +6,7 @@ stages:
 ####START####                                     PROJECT LEVEL VARIABLES                                  ####START####
 ########################################################################################################################
 variables:
-  VERSION: 0.5.6a
+  VERSION: 0.6.0
   VERUS_CLI_LINUX: Verus-CLI-Linux-v${VERSION}.tar.gz
   VERUS_CLI_WINDOWS: Verus-CLI-Windows-v${VERSION}.zip
   VERUS_CLI_MACOS: Verus-CLI-MacOS-v${VERSION}.tar.gz
@@ -26,7 +26,7 @@ variables:
 ####START####                                            LINUX                                             ####START####
 ########################################################################################################################
 build:linux:
-  image: asherd/verus-builders:verus-centos
+  image: asherd/verus-builders:verus-ubuntu
   variables:
     DOCKER_DRIVER: overlay2
   stage: build
@@ -35,8 +35,6 @@ build:linux:
     paths:
     - depends/built
   script:
-  - scl enable devtoolset-7 sh
-  - source /opt/rh/devtoolset-7/enable
   - zcutil/build.sh -j$(nproc)
   - mkdir verus-cli
   - cp src/komodod

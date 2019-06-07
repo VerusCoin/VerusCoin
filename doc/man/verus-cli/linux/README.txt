@@ -1,4 +1,4 @@
-VerusCoin Command Line Tools v0.5.6a
+VerusCoin Command Line Tools v0.6.0
 
 Contents:
 komodod - VerusCoin's enhanced Komodo daemon
@@ -12,4 +12,3 @@ Run ./verusd to launch komodod, and use verus to run commands such as:
 ./verus stop
 Which signals komodod (if it is running) to stop running.
 
-To upgrade your Verus Enhanced Agama Wallet, run upgrade-agama.sh and enter the directory to your agama app

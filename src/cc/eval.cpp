@@ -73,18 +73,32 @@ bool Eval::Dispatch(const CC *cond, const CTransaction &txTo, unsigned int nIn)
     std::vector<uint8_t> vparams(cond->code+1, cond->code+cond->codeLength);
     switch ( ecode )
     {
+        case EVAL_PBAASDEFINITION:
+        case EVAL_SERVICEREWARD:
+        case EVAL_EARNEDNOTARIZATION:
+        case EVAL_ACCEPTEDNOTARIZATION:
+        case EVAL_FINALIZENOTARIZATION:
+        case EVAL_CROSSCHAIN_OUTPUT:
+        case EVAL_CROSSCHAIN_EXPORT:
+        case EVAL_CROSSCHAIN_IMPORT:
+        case EVAL_INSTANTSPEND:
+        case EVAL_CROSSCHAIN_INPUT:
+            if (!chainActive.LastTip() || CConstVerusSolutionVector::activationHeight.ActiveVersion(chainActive.LastTip()->GetHeight()) < CActivationHeight::SOLUTION_VERUSV3)
+            {
+                // if chain is not able to process this yet, don't drop through to do so
+                break;
+            }
+
+        case EVAL_STAKEGUARD:
+            return(ProcessCC(cp,this, vparams, txTo, nIn));
+            break;
+
         case EVAL_IMPORTPAYOUT:
             //return ImportPayout(vparams, txTo, nIn);
             break;
             
         case EVAL_IMPORTCOIN:
             //return ImportCoin(vparams, txTo, nIn);
-            break;
-            
-        default:
-            // only support coinbase guard for now
-            if (ecode == EVAL_STAKEGUARD)
-                return(ProcessCC(cp,this, vparams, txTo, nIn));
             break;
     }
     return Invalid("invalid-code, dont forget to add EVAL_NEWCC to Eval::Dispatch");

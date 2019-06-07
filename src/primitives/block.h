@@ -13,71 +13,12 @@
 #include "arith_uint256.h"
 #include "primitives/solutiondata.h"
 
-// this class provides a minimal and compact representation of a merge mined PBaaS header
-class CPBaaSBlockHeader
-{
-public:
-    // header
-    static const size_t HEADER_SIZE = SOLUTION_PBAAS_HEADER_SIZE;   // serialized PBaaS header size, which is different from a standard block header
-    static const size_t ID_OFFSET = 4+32+32+32+4;                   // offset of 32 bit ID in serialized stream
-    static const int32_t CURRENT_VERSION = CPOSNonce::VERUS_V2;
-    static const int32_t CURRENT_VERSION_MASK = 0x0000ffff;         // for compatibility
-
-    int32_t nVersion;
-    uint256 hashPrevBlock;
-    uint256 hashMerkleRoot;
-    uint256 hashFinalSaplingRoot;
-    uint32_t nBits;
-    uint256 chainID;
-
-    CPBaaSBlockHeader()
-    {
-        SetNull();
-    }
-
-    CPBaaSBlockHeader(const char *pbegin, const char *pend) 
-    {
-        CDataStream s = CDataStream(pbegin, pend, SER_NETWORK, PROTOCOL_VERSION);
-        s >> *this;
-    }
-
-    CPBaaSBlockHeader(int32_t ver, const uint256 &hashPrev, const uint256 &hashMerkle, const uint256 &hashFinalSapling, uint32_t bits, const uint256 &cID)
-    {
-        nVersion = ver;
-        hashPrevBlock = hashPrev;
-        hashMerkleRoot = hashMerkle;
-        hashFinalSaplingRoot = hashFinalSapling;
-        nBits = bits;
-        chainID = cID;
-    }
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(this->nVersion);
-        READWRITE(hashPrevBlock);
-        READWRITE(hashMerkleRoot);
-        READWRITE(hashFinalSaplingRoot);
-        READWRITE(nBits);
-        READWRITE(chainID);
-    }
-
-    void SetNull()
-    {
-        nVersion = CURRENT_VERSION;
-        hashPrevBlock.SetNull();
-        hashMerkleRoot.SetNull();
-        hashFinalSaplingRoot.SetNull();
-        nBits = 0;
-        chainID.SetNull();
-    }
-
-    bool IsNull() const
-    {
-        return (nBits == 0);
-    }
-};
+// does not check for height / sapling upgrade, etc. this should not be used to get block proofs
+// on a pre-VerusPoP chain
+arith_uint256 GetCompactPower(const uint256 &nNonce, uint32_t nBits, int32_t version=CPOSNonce::VERUS_V2);
+class CMMRPowerNode;
+class CMerkleBranch;
+class CBlockHeader;
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -169,101 +110,61 @@ public:
         CVerusSolutionVector(nSolution).ResizeExtraData(newSize);
     }
 
-    // returns -1 on failure, upon failure, pbbh is undefined and likely corrupted
-    int32_t GetPBaaSHeader(CPBaaSBlockHeader &pbh, const uint256 &cID)
+    uint32_t ExtraDataLen()
     {
-        // find the specified PBaaS header in the solution and return its index if present
-        // if not present, return -1
-        if (nVersion == VERUS_V2)
-        {
-            // search in the solution for this header index and return it if found
-            CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-            uint32_t descr = sv.Descriptor();
-            if (sv.IsPBaaS() == 1)
-            {
-                uint32_t len = sv.ExtraDataLen();
-                unsigned char *ped = sv.ExtraDataPtr();
-
-                // we got some extra data, now check to see if it has the PBaaS header
-                for (int i = 0; ((i + 1) * SOLUTION_PBAAS_HEADER_SIZE) <= len; i++)
-                {
-                    uint256 *pchainID = (uint256 *)(ped + (i * SOLUTION_PBAAS_HEADER_SIZE) + CPBaaSBlockHeader::ID_OFFSET);
-                    if (*pchainID == cID)
-                    {
-                        char *pch = (char *)ped + i * SOLUTION_PBAAS_HEADER_SIZE;
-                        CDataStream s = CDataStream(pch, pch + SOLUTION_PBAAS_HEADER_SIZE, SER_NETWORK, PROTOCOL_VERSION);
-                        pbh.Unserialize(s);
-                        if (!pbh.IsNull())
-                        {
-                            return i;
-                        }
-                    }
-                }
-            }
-        }
-        return -1;
+        return CVerusSolutionVector(nSolution).ExtraDataLen();
     }
 
+    // returns -1 on failure, upon failure, pbbh is undefined and likely corrupted
+    int32_t GetPBaaSHeader(CPBaaSBlockHeader &pbh, const uint160 &cID) const;
+
     // returns false on failure to read data
-    bool GetPBaaSHeader(CPBaaSBlockHeader &pbh, uint32_t idx)
+    bool GetPBaaSHeader(CPBaaSBlockHeader &pbh, uint32_t idx) const
     {
         // search in the solution for this header index and return it if found
-        CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-        uint32_t descr = sv.Descriptor();
-        uint32_t len = sv.ExtraDataLen();
+        CPBaaSSolutionDescriptor descr = CConstVerusSolutionVector::GetDescriptor(nSolution);
         int pbType;
-        if (nVersion == VERUS_V2 && sv.IsPBaaS() == 1 && ((idx + 1) * SOLUTION_PBAAS_HEADER_SIZE) <= len)
+        if (nVersion == VERUS_V2 && CConstVerusSolutionVector::IsPBaaS(nSolution) != 0 && idx < descr.numPBaaSHeaders)
         {
-            unsigned char *ped = sv.ExtraDataPtr();
-            char *pch = (char *)ped + idx * SOLUTION_PBAAS_HEADER_SIZE;
-            CDataStream s = CDataStream(pch, pch + SOLUTION_PBAAS_HEADER_SIZE, SER_NETWORK, PROTOCOL_VERSION);
-            pbh.Unserialize(s);
+            pbh = *(CConstVerusSolutionVector::GetFirstPBaaSHeader(nSolution) + idx);
             return true;
         }
         return false;
     }
 
+    // returns false on failure to read data
+    int32_t NumPBaaSHeaders() const
+    {
+        // search in the solution for this header index and return it if found
+        CPBaaSSolutionDescriptor descr = CConstVerusSolutionVector::GetDescriptor(nSolution);
+        return descr.numPBaaSHeaders;
+    }
+
     // this can save a new header into an empty space or update an existing header
-    bool SavePBaaSHeader(uint32_t idx, CPBaaSBlockHeader &pbh)
+    bool SavePBaaSHeader(CPBaaSBlockHeader &pbh, uint32_t idx)
     {
         CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
         int ix;
 
-        if (IsPBaaS() == 1 && pbh.nBits && !pbh.chainID.IsNull() && (((ix = GetPBaaSHeader(pbbh, pbh.chainID)) == -1) || ix == idx))
+        CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
+
+        if (sv.IsPBaaS() && !pbh.IsNull() && idx < sv.GetNumPBaaSHeaders() && (((ix = GetPBaaSHeader(pbbh, pbh.chainID)) == -1) || ix == idx))
         {
-            // make sure the place it is going is the same or valid and empty
-            if (ix != -1 || (GetPBaaSHeader(pbbh, idx) && pbbh.IsNull()))
-            {
-                CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-
-                // this serializes the specified data and stores it in the indexed location of the header solution
-                CDataStream s = CDataStream(SER_NETWORK, PROTOCOL_VERSION);
-                pbh.Serialize(s);
-
-                // write serialized data to the solution
-                std::memcpy(sv.ExtraDataPtr() + (idx * SOLUTION_PBAAS_HEADER_SIZE), std::vector<unsigned char>(s.begin(), s.end()).data(), SOLUTION_PBAAS_HEADER_SIZE);
-                return true;
-            }
+            sv.SetPBaaSHeader(pbh, idx);
+            return true;
         }
         return false;
     }
 
-    bool UpdatePBaaSHeader(CPBaaSBlockHeader &pbh)
+    bool UpdatePBaaSHeader(const CPBaaSBlockHeader &pbh)
     {
         CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
         uint32_t idx;
 
         // what we are updating, must be present
-        if (pbh.nBits && !pbh.chainID.IsNull() && (idx = GetPBaaSHeader(pbbh, pbh.chainID)) != -1)
+        if (!pbh.IsNull() && (idx = GetPBaaSHeader(pbbh, pbh.chainID)) != -1)
         {
-            CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-
-            // this serializes the specified data and stores it in the indexed location of the header solution
-            CDataStream s = CDataStream(SER_NETWORK, PROTOCOL_VERSION);
-            pbh.Serialize(s);
-
-            // write serialized data to the solution
-            std::memcpy(sv.ExtraDataPtr() + (idx * SOLUTION_PBAAS_HEADER_SIZE), std::vector<unsigned char>(s.begin(), s.end()).data(), SOLUTION_PBAAS_HEADER_SIZE);
+            CVerusSolutionVector(nSolution).SetPBaaSHeader(pbh, idx);
             return true;
         }
         return false;
@@ -271,119 +172,62 @@ public:
 
     void DeletePBaaSHeader(uint32_t idx)
     {
-        // this frees a specific slot in the array of PBaaS headers, so it may be used for another chain's header
-        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
         CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-        uint32_t len = sv.ExtraDataLen();
-        uint32_t descr = sv.Descriptor();
-        if (nVersion == VERUS_V2 && sv.IsPBaaS() == 1 && (((idx + 1) * SOLUTION_PBAAS_HEADER_SIZE) <= len))
+        CPBaaSSolutionDescriptor descr = sv.Descriptor();
+        if (idx < descr.numPBaaSHeaders)
         {
-            // write serialized data to the solution
-            CDataStream s = CDataStream(SER_NETWORK, PROTOCOL_VERSION);
-            pbbh.Serialize(s);
-            std::memcpy(sv.ExtraDataPtr() + (idx * SOLUTION_PBAAS_HEADER_SIZE), std::vector<unsigned char>(s.begin(), s.end()).data(), SOLUTION_PBAAS_HEADER_SIZE);
-        }
-    }
-
-    int32_t AddPBaaSHeader(CPBaaSBlockHeader &pbh)
-    {
-        // allocates and reserves a spot in the PBaaS header array to be used for a specific header
-        // it returns the index of the new, allocated spot, if no spot is available, it returns -1
-        // find the specified PBaaS header in the solution and return its index if present
-        // if not present, return -1
-        if (nVersion == VERUS_V2)
-        {
-            // search in the solution for this header index and return it if found
-            CVerusSolutionVector sv = CVerusSolutionVector(nSolution);
-            uint32_t descr = sv.Descriptor();
-            if (sv.IsPBaaS() == 1)
+            CPBaaSBlockHeader pbh;
+            // if we weren't last, move the one that was last to our prior space
+            if (idx < (descr.numPBaaSHeaders - 1))
             {
-                uint32_t len = sv.ExtraDataLen();
-                unsigned char *ped = sv.ExtraDataPtr();
-
-                // we got some extra data, now check to see if it has the PBaaS header
-                for (int i = 0; ((i + 1) * SOLUTION_PBAAS_HEADER_SIZE) <= len; i++)
-                {
-                    uint256 *pchainID = (uint256 *)(ped + (i * SOLUTION_PBAAS_HEADER_SIZE) + CPBaaSBlockHeader::ID_OFFSET);
-                    if (pchainID->IsNull())
-                    {
-                        char *pch = (char *)ped + i * SOLUTION_PBAAS_HEADER_SIZE;
-                        CDataStream s = CDataStream(pch, pch + SOLUTION_PBAAS_HEADER_SIZE, SER_NETWORK, PROTOCOL_VERSION);
-                        CPBaaSBlockHeader pbbh;
-                        pbbh.Unserialize(s);
-                        if (pbbh.IsNull())
-                        {
-                            SavePBaaSHeader(i, pbh);
-                            return i;
-                        }
-                    }
-                }
+                sv.GetPBaaSHeader(pbh, descr.numPBaaSHeaders - 1);
             }
+            sv.SetPBaaSHeader(pbh, idx);
+            
+            descr.numPBaaSHeaders--;
+            sv.SetDescriptor(descr);
         }
-        return -1;
     }
 
-    // add the parts of the block header that can be represented by a PBaaS header to the solution
-    int32_t AddPBaaSHeader(CBlockHeader &bh, const uint256 &cID)
+    // returns the index of the new header if added, otherwise, -1
+    int32_t AddPBaaSHeader(const CPBaaSBlockHeader &pbh);
+
+    // add the parts of this block header that can be represented by a PBaaS header to the solution
+    int32_t AddPBaaSHeader(uint256 hashPrevMMRRoot, const uint160 &cID)
     {
-        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader(bh.nVersion, bh.hashPrevBlock, bh.hashMerkleRoot, bh.hashFinalSaplingRoot, bh.nBits, cID);
+
+        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader(cID, CPBaaSPreHeader(*this), hashPrevMMRRoot);
         return AddPBaaSHeader(pbbh);
     }
 
-    // sets the function of the current in memory header to the PBaaS header's values
-    void SetPBaaSHeader(const CPBaaSBlockHeader &pbh)
+    bool AddUpdatePBaaSHeader(uint256 mmvRoot);
+    bool AddUpdatePBaaSHeader(const CPBaaSBlockHeader &pbh);
+
+    // clears everything except version, time, and solution, which are shared across all merge mined blocks
+    void ClearNonCanonicalData()
     {
-        // find the specified PBaaS header in the solution and make this header match the chain header passed
-        nVersion = pbh.nVersion;
-        hashPrevBlock = pbh.hashPrevBlock;
-        hashMerkleRoot = pbh.hashMerkleRoot;
-        hashFinalSaplingRoot = pbh.hashFinalSaplingRoot;
-        nBits = pbh.nBits;
+        hashPrevBlock = uint256();
+        hashMerkleRoot = uint256();
+        hashFinalSaplingRoot = uint256();
+        nBits = 0;
+        nNonce = uint256();
     }
 
-    bool SetPBaaSHeader(const uint256 &cID)
-    {
-        // find the specified PBaaS header in the solution and make this header match the specified chain's header if present
-        // if not present, return false
-        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
-
-        if (GetPBaaSHeader(pbbh, cID) != -1)
-        {
-            SetPBaaSHeader(pbbh);
-            return true;
-        }
-        return false;
-    }
-
-    bool SetPBaaSHeader(uint32_t idx)
-    {
-        // find the specified PBaaS header in the solution and make this header match the specified chain's header if present
-        // if not present, return false
-        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
-
-        if (GetPBaaSHeader(pbbh, idx))
-        {
-            SetPBaaSHeader(pbbh);
-            return true;
-        }
-        return false;
-    }
-
-    void SetCanonicalPBaaSHeader()
-    {
-        // this puts the header into a canonical state that will always hash to the same result, regardless of which chain
-        // the header is used for. it assumes that the canonical header is always present in position 0
-        CPBaaSBlockHeader pbbh = CPBaaSBlockHeader();
-        if (GetPBaaSHeader(pbbh, 0))
-        {
-            SetPBaaSHeader(pbbh);
-        }
-    }
+    // this confirms that the current header's data matches what would be expected from its preheader hash in the
+    // solution
+    bool CheckNonCanonicalData() const;
+    bool CheckNonCanonicalData(uint160 &cID) const;
 
     uint256 GetHash() const
     {
         return (this->*hashFunction)();
     }
+
+    // return a node from this block header, including hash of merkle root and block hash as well as compact chain power, to put into an MMR
+    CMMRPowerNode GetMMRNode() const;
+    void AddMerkleProofBridge(CMerkleBranch &branch) const;
+    void AddBlockProofBridge(CMerkleBranch &branch) const;
+    uint256 GetPrevMMRRoot() const;
 
     uint256 GetSHA256DHash() const;
     static void SetSHA256DHash();

@@ -9,11 +9,240 @@
 #include "tinyformat.h"
 #include "utilstrencodings.h"
 #include "crypto/common.h"
+#include "mmr.h"
 
 extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH;
+extern uint160 ASSETCHAINS_CHAINID;
+extern uint160 VERUS_CHAINID;
 
 // default hash algorithm for block
 uint256 (CBlockHeader::*CBlockHeader::hashFunction)() const = &CBlockHeader::GetSHA256DHash;
+
+// does not check for height / sapling upgrade, etc. this should not be used to get block proofs
+// on a pre-VerusPoP chain
+arith_uint256 GetCompactPower(const uint256 &nNonce, uint32_t nBits, int32_t version)
+{
+    arith_uint256 bnWork, bnStake = arith_uint256(0);
+    arith_uint256 BIG_ZERO = bnStake;
+
+    bool fNegative;
+    bool fOverflow;
+    bnWork.SetCompact(nBits, &fNegative, &fOverflow);
+
+    if (fNegative || fOverflow || bnWork == 0)
+        return BIG_ZERO;
+
+    // if POS block, add stake
+    CPOSNonce nonce(nNonce);
+    if (nonce.IsPOSNonce(version))
+    {
+        bnStake.SetCompact(nonce.GetPOSTarget(), &fNegative, &fOverflow);
+        if (fNegative || fOverflow || bnStake == 0)
+            return BIG_ZERO;
+
+        // as the nonce has a fixed definition for a POS block, add the random amount of "work" from the nonce, so there will
+        // statistically always be a deterministic winner in POS
+        arith_uint256 aNonce;
+
+        // random amount of additional stake added is capped to 1/2 the current stake target
+        aNonce = UintToArith256(nNonce) | (bnStake << (uint64_t)1);
+
+        // We need to compute 2**256 / (bnTarget+1), but we can't represent 2**256
+        // as it's too large for a arith_uint256. However, as 2**256 is at least as large
+        // as bnTarget+1, it is equal to ((2**256 - bnTarget - 1) / (bnTarget+1)) + 1,
+        // or ~bnTarget / (nTarget+1) + 1.
+        bnWork = (~bnWork / (bnWork + 1)) + 1;
+        bnStake = ((~bnStake / (bnStake + 1)) + 1) + ((~aNonce / (aNonce + 1)) + 1);
+        if (!(bnWork >> 128 == BIG_ZERO && bnStake >> 128 == BIG_ZERO))
+        {
+            return BIG_ZERO;
+        }
+        return bnWork + (bnStake << 128);
+    }
+    else
+    {
+        bnWork = (~bnWork / (bnWork + 1)) + 1;
+
+        // this would be overflow
+        if (!((bnWork >> 128) == BIG_ZERO))
+        {
+            printf("Overflow\n");
+            return BIG_ZERO;
+        }
+        return bnWork;
+    }
+}
+
+CPBaaSPreHeader::CPBaaSPreHeader(const CBlockHeader &bh)
+{
+    hashPrevBlock = bh.hashPrevBlock;
+    hashMerkleRoot = bh.hashMerkleRoot;
+    hashFinalSaplingRoot = bh.hashFinalSaplingRoot;
+    nNonce = bh.nNonce;
+    nBits = bh.nBits;
+}
+
+CMMRPowerNode CBlockHeader::GetMMRNode() const
+{
+    uint256 blockHash = GetHash();
+
+    uint256 preHash = Hash(BEGIN(hashMerkleRoot), END(hashMerkleRoot), BEGIN(blockHash), END(blockHash));
+    uint256 power = ArithToUint256(GetCompactPower(nNonce, nBits, nVersion));
+
+    return CMMRPowerNode(Hash(BEGIN(preHash), END(preHash), BEGIN(power), END(power)), power);
+}
+
+void CBlockHeader::AddMerkleProofBridge(CMerkleBranch &branch) const
+{
+    // we need to add the block hash on the right
+    branch.branch.push_back(GetHash());
+    branch.nIndex = branch.nIndex << 1;
+}
+
+void CBlockHeader::AddBlockProofBridge(CMerkleBranch &branch) const
+{
+    // we need to add the merkle root on the left
+    branch.branch.push_back(hashMerkleRoot);
+    branch.nIndex = branch.nIndex << 1 + 1;
+}
+
+uint256 CBlockHeader::GetPrevMMRRoot() const
+{
+    uint256 ret;
+    CPBaaSBlockHeader pbh;
+    if (GetPBaaSHeader(pbh, ASSETCHAINS_CHAINID) != -1)
+    {
+        ret = pbh.hashPrevMMRRoot;
+    }
+    return ret;
+}
+
+// checks that the solution stored data for this header matches what is expected, ensuring that the
+// values in the header match the hash of the pre-header. it does not check the prev MMR root
+bool CBlockHeader::CheckNonCanonicalData() const
+{
+    CPBaaSPreHeader pbph(hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot, nNonce, nBits);
+    uint256 dummyMMR;
+    CPBaaSBlockHeader pbbh1 = CPBaaSBlockHeader(ASSETCHAINS_CHAINID, pbph, dummyMMR);
+    CPBaaSBlockHeader pbbh2;
+    int32_t idx = GetPBaaSHeader(pbbh2, ASSETCHAINS_CHAINID);
+    if (idx != -1)
+    {
+        if (pbbh1.hashPreHeader == pbbh2.hashPreHeader)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// checks that the solution stored data for this header matches what is expected, ensuring that the
+// values in the header match the hash of the pre-header. it does not check the prev MMR root
+bool CBlockHeader::CheckNonCanonicalData(uint160 &cID) const
+{
+    CPBaaSPreHeader pbph(hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot, nNonce, nBits);
+    uint256 dummyMMR;
+    CPBaaSBlockHeader pbbh1 = CPBaaSBlockHeader(cID, pbph, dummyMMR);
+    CPBaaSBlockHeader pbbh2;
+    int32_t idx = GetPBaaSHeader(pbbh2, cID);
+    if (idx != -1)
+    {
+        if (pbbh1.hashPreHeader == pbbh2.hashPreHeader)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// returns -1 on failure, upon failure, pbbh is undefined and likely corrupted
+int32_t CBlockHeader::GetPBaaSHeader(CPBaaSBlockHeader &pbh, const uint160 &cID) const
+{
+    // find the specified PBaaS header in the solution and return its index if present
+    // if not present, return -1
+    if (nVersion == VERUS_V2)
+    {
+        // search in the solution for this header index and return it if found
+        CPBaaSSolutionDescriptor d = CVerusSolutionVector::solutionTools.GetDescriptor(nSolution);
+        if (CVerusSolutionVector::solutionTools.IsPBaaS(nSolution) != 0)
+        {
+            int32_t len = CVerusSolutionVector::solutionTools.ExtraDataLen(nSolution);
+            int32_t numHeaders = d.numPBaaSHeaders;
+            const CPBaaSBlockHeader *ppbbh = CVerusSolutionVector::solutionTools.GetFirstPBaaSHeader(nSolution);
+            for (int32_t i = 0; i < numHeaders; i++)
+            {
+                if ((ppbbh + i)->chainID == cID)
+                {
+                    pbh = *(ppbbh + i);
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+// returns the index of the new header if added, otherwise, -1
+int32_t CBlockHeader::AddPBaaSHeader(const CPBaaSBlockHeader &pbh)
+{
+    CVerusSolutionVector sv(nSolution);
+    CPBaaSSolutionDescriptor d = sv.Descriptor();
+    int32_t retVal = d.numPBaaSHeaders;
+
+    // make sure we have space. do not adjust capacity
+    // if there is anything in the extradata, we have no more room
+    if (!d.extraDataSize && (uint32_t)(sv.ExtraDataLen() / sizeof(CPBaaSBlockHeader)) > 0)
+    {
+        d.numPBaaSHeaders++;
+        sv.SetDescriptor(d);                            // update descriptor to make sure it will accept the set
+        sv.SetPBaaSHeader(pbh, d.numPBaaSHeaders - 1);
+        return retVal;
+    }
+
+    return -1;
+}
+
+// add or update the PBaaS header for this block from the current block header & this prevMMR. This is required to make a valid PoS or PoW block.
+bool CBlockHeader::AddUpdatePBaaSHeader(const CPBaaSBlockHeader &pbh)
+{
+    CPBaaSBlockHeader pbbh;
+    if (CConstVerusSolutionVector::Version(nSolution) == CActivationHeight::SOLUTION_VERUSV3)
+    {
+        if (int32_t idx = GetPBaaSHeader(pbbh, pbh.chainID) != -1)
+        {
+            return UpdatePBaaSHeader(pbh);
+        }
+        else
+        {
+            return (AddPBaaSHeader(pbh) != -1);
+        }
+    }
+    return false;
+}
+
+// add or update the current PBaaS header for this block from the current block header & this prevMMR.
+// This is required to make a valid PoS or PoW block.
+bool CBlockHeader::AddUpdatePBaaSHeader(uint256 prevMMRRoot)
+{
+    if (CConstVerusSolutionVector::Version(nSolution) == CActivationHeight::SOLUTION_VERUSV3)
+    {
+        CPBaaSPreHeader pbph(hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot, nNonce, nBits);
+        CPBaaSBlockHeader pbh(ASSETCHAINS_CHAINID, pbph, prevMMRRoot);
+
+        CPBaaSBlockHeader pbbh;
+        int32_t idx = GetPBaaSHeader(pbbh, ASSETCHAINS_CHAINID);
+
+        if (idx != -1)
+        {
+            return UpdatePBaaSHeader(pbh);
+        }
+        else
+        {
+            return (AddPBaaSHeader(pbh) != -1);
+        }
+    }
+    return false;
+}
 
 uint256 CBlockHeader::GetSHA256DHash() const
 {
@@ -40,13 +269,13 @@ uint256 CBlockHeader::GetVerusV2Hash() const
     {
         if (nVersion == VERUS_V2)
         {
-            if (CConstVerusSolutionVector::IsPBaaS(nSolution) == 1)
+            // in order for this to work, the PBaaS hash of the pre-header must match the header data
+            // otherwise, it cannot clear the canonical data and hash in a chain-independent manner
+            if (CConstVerusSolutionVector::IsPBaaS(nSolution) && CheckNonCanonicalData())
             {
-                // hash canonical header if this is merge-mine capable
-                // CBlockHeader bh = CBlockHeader(*this);
-                // bh.SetCanonicalPBaaSHeader();
-                // return SerializeVerusHashV2b(bh);
-                return SerializeVerusHashV2b(*this);
+                CBlockHeader bh = CBlockHeader(*this);
+                bh.ClearNonCanonicalData();
+                return SerializeVerusHashV2b(bh);
             }
             else
             {

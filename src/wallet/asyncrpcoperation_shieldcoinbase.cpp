@@ -224,7 +224,7 @@ bool ShieldToAddress::operator()(const libzcash::SproutPaymentAddress &zaddr) co
     CMutableTransaction rawTx(m_op->tx_);
     for (ShieldCoinbaseUTXO & t : m_op->inputs_) {
         CTxIn in(COutPoint(t.txid, t.vout));
-        if (t.amount >= ASSETCHAINS_TIMELOCKGTE)
+        if ((uint64_t)t.amount >= ASSETCHAINS_TIMELOCKGTE)
             in.nSequence = 0xfffffffe;
         rawTx.vin.push_back(in);
     }
@@ -270,7 +270,10 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress &zaddr) c
 
     // Add transparent inputs
     for (auto t : m_op->inputs_) {
-        if (t.amount >= ASSETCHAINS_TIMELOCKGTE)
+        m_op->builder_.SetLockTime((uint32_t)(chainActive.Height()));
+        m_op->builder_.AddTransparentInput(COutPoint(t.txid, t.vout), t.scriptPubKey, t.amount, 0xfffffffe);
+        /*
+        if ((uint64_t)t.amount >= ASSETCHAINS_TIMELOCKGTE)
         {
             m_op->builder_.SetLockTime((uint32_t)(chainActive.Height()));
             m_op->builder_.AddTransparentInput(COutPoint(t.txid, t.vout), t.scriptPubKey, t.amount, 0xfffffffe);
@@ -279,10 +282,13 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress &zaddr) c
         {
             m_op->builder_.AddTransparentInput(COutPoint(t.txid, t.vout), t.scriptPubKey, t.amount);
         }
+        */
     }
 
     // Send all value to the target z-addr
     m_op->builder_.SendChangeTo(zaddr, ovk);
+
+    
 
     // Build the transaction
     auto maybe_tx = m_op->builder_.Build();

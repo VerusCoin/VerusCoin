@@ -94,14 +94,14 @@ bool CScriptExt::ExtractVoutDestination(const CTransaction& tx, int32_t voutNum,
     CScriptExt spk = tx.vout[voutNum].scriptPubKey;
 
     // if this is a timelocked transaction, get the destination behind the time lock
-    if (tx.IsCoinBase() && tx.vout.size() == 2 && voutNum == 0 &&
+    if (tx.IsCoinBase() && voutNum == 0 &&
         spk.IsPayToScriptHash(&scriptHash) &&
-        tx.vout[1].scriptPubKey.IsOpReturn())
+        tx.vout.back().scriptPubKey.IsOpReturn())
     {
         opcodetype op;
         std::vector<uint8_t> opretData = std::vector<uint8_t>();
-        CScript::const_iterator it = tx.vout[1].scriptPubKey.begin() + 1;
-        if (tx.vout[1].scriptPubKey.GetOp2(it, op, &opretData))
+        CScript::const_iterator it = tx.vout.back().scriptPubKey.begin() + 1;
+        if (tx.vout.back().scriptPubKey.GetOp2(it, op, &opretData))
         {
             if (opretData.size() > 0 && opretData[0] == OPRETTYPE_TIMELOCK)
             {

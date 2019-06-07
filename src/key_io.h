@@ -25,6 +25,8 @@ CExtPubKey DecodeExtPubKey(const std::string& str);
 std::string EncodeExtPubKey(const CExtPubKey& extpubkey);
 
 std::string EncodeDestination(const CTxDestination& dest);
+std::vector<unsigned char> GetDestinationBytes(const CTxDestination& dest);
+uint160 GetDestinationID(const CTxDestination dest);
 CTxDestination DecodeDestination(const std::string& str);
 bool IsValidDestinationString(const std::string& str);
 bool IsValidDestinationString(const std::string& str, const CChainParams& params);

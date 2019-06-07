@@ -10,6 +10,7 @@
 #include "policy/fees.h"
 #include "komodo_defs.h"
 #include "importcoin.h"
+#include "pbaas/notarization.h"
 
 #include <assert.h>
 
@@ -589,7 +590,17 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t *interestp,const CTr
         return 0;
     for (unsigned int i = 0; i < tx.vin.size(); i++)
     {
-        value = GetOutputFor(tx.vin[i]).nValue;
+        value = 0;
+        const CCoins* coins = AccessCoins(tx.vin[i].prevout.hash);
+        if (coins && coins->IsAvailable(tx.vin[i].prevout.n))
+        {
+            value = coins->vout[tx.vin[i].prevout.n].nValue;
+        }
+        else
+        {
+            return 0;
+        }
+
         nResult += value;
 #ifdef KOMODO_ENABLE_INTEREST
         if ( ASSETCHAINS_SYMBOL[0] == 0 && nHeight >= 60000 )

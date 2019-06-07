@@ -14,6 +14,7 @@
  ******************************************************************************/
 #include "komodo_defs.h"
 #include "key_io.h"
+#include "pbaas/crosschainrpc.h"
 #include <string.h>
 
 #ifdef _WIN32
@@ -1424,7 +1425,37 @@ void komodo_configfile(char *symbol,uint16_t rpcport)
 #ifndef FROM_CLI
             if ( (fp= fopen(fname,"wb")) != 0 )
             {
-                fprintf(fp,"rpcuser=user%u\nrpcpassword=pass%s\nrpcport=%u\nserver=1\ntxindex=1\nrpcworkqueue=256\nrpcallowip=127.0.0.1\n",crc,password,rpcport);
+                fprintf(fp,"rpcuser=user%u\nrpcpassword=pass%s\nrpcport=%u\nserver=1\ntxindex=1\nrpcworkqueue=256\nrpcallowip=127.0.0.1\nrpchost=127.0.0.1\n",crc,password,rpcport);
+                // add basic chain parameters for non-VRSC chains
+                if (!_IsVerusActive())
+                {
+                    const char *charPtr;
+                    // all basic coin parameters
+                    fprintf(fp,"startblock=%d\n", ConnectedChains.thisChain.startBlock);
+                    fprintf(fp,"endblock=%d\n", ConnectedChains.thisChain.endBlock);
+                    fprintf(fp,"ac_algo=verushash\nac_veruspos=50\nac_cc=1\n");
+                    fprintf(fp,"ac_supply=%s\n", (charPtr = mapArgs["-ac_supply"].c_str())[0] == 0 ? "0" : charPtr);
+                    fprintf(fp,"ac_halving=%s\n", (charPtr = mapArgs["-ac_halving"].c_str())[0] == 0 ? "0" : charPtr);
+                    fprintf(fp,"ac_decay=%s\n", (charPtr = mapArgs["-ac_decay"].c_str())[0] == 0 ? "0" : charPtr);
+                    fprintf(fp,"ac_reward=%s\n", (charPtr = mapArgs["-ac_reward"].c_str())[0] == 0 ? "0" : charPtr);
+                    fprintf(fp,"ac_eras=%s\n", (charPtr = mapArgs["-ac_eras"].c_str())[0] == 0 ? "1" : charPtr);
+                    fprintf(fp,"ac_end=%s\n", (charPtr = mapArgs["-ac_end"].c_str())[0] == 0 ? "0" : charPtr);
+
+                    if (GetArg("-port", 0))
+                    {
+                        fprintf(fp,"port=%s\n", mapArgs["-port"].c_str());
+                    }
+
+                    auto nodeIt = mapMultiArgs.find("-seednode");
+                    if (nodeIt != mapMultiArgs.end())
+                    {
+                        std::vector<std::string> &nodeStrs = mapMultiArgs["-seednode"];
+                        for (auto nodeStr : nodeStrs)
+                        {
+                            fprintf(fp,"seednode=%s\n", nodeStr.c_str());
+                        }
+                    }
+                }
                 fclose(fp);
                 printf("Created (%s)\n",fname);
             } else printf("Couldnt create (%s)\n",fname);
@@ -1506,6 +1537,13 @@ uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_
 
 uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
 {
+    if (!_IsVerusActive())
+    {
+        if (uint16_t retVal = GetArg("-port", 0))
+        {
+            return retVal;
+        }
+    }
     if ( magic == 0x8de4eef9 )
         return(7770);
     else if ( extralen == 0 )
@@ -1550,12 +1588,12 @@ int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp)
 
 char *argv0suffix[] =
 {
-    (char *)"mnzd", (char *)"mnz-cli", (char *)"mnzd.exe", (char *)"mnz-cli.exe", (char *)"btchd", (char *)"btch-cli", (char *)"btchd.exe", (char *)"btch-cli.exe"
+    (char *)"verusd", (char *)"verus-cli", (char *)"verusd.exe", (char *)"verus-cli.exe", (char *)"verustestd", (char *)"verustest-cli", (char *)"verustestd.exe", (char *)"verustest-cli.exe"
 };
 
 char *argv0names[] =
 {
-    (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH"
+    (char *)"VRSC", (char *)"VRSC", (char *)"VRSC", (char *)"VRSC", (char *)"VRSCTEST", (char *)"VRSCTEST", (char *)"VRSCTEST", (char *)"VRSCTEST"
 };
 
 int64_t komodo_max_money()
@@ -1636,24 +1674,30 @@ uint64_t komodo_ac_block_subsidy(int nHeight)
         }
     }
     if ( nHeight == 1 )
-        if ( ASSETCHAINS_LASTERA == 0 )
-            subsidy = ASSETCHAINS_SUPPLY * SATOSHIDEN + (ASSETCHAINS_MAGIC & 0xffffff);
-        else
-            subsidy += ASSETCHAINS_SUPPLY * SATOSHIDEN + (ASSETCHAINS_MAGIC & 0xffffff);
-
+    {
+        subsidy += ASSETCHAINS_SUPPLY + (ASSETCHAINS_MAGIC & 0xffffff);
+    }
     return(subsidy);
 }
 
 extern int64_t MAX_MONEY;
 extern std::string VERUS_CHEATCATCHER;
+bool SetThisChain(UniValue &chainDefinition);
 
 void komodo_args(char *argv0)
 {
     extern const char *Notaries_elected1[][2];
-    std::string name,addn; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[256],*extraptr=0; FILE *fp; uint64_t val; uint16_t port; int32_t i,baseid,len,n,extralen = 0;
+
+    std::string name, addn; 
+    char *dirname,fname[512],arg0str[64],magicstr[9]; 
+    uint8_t magic[4],extrabuf[256],*extraptr=0; FILE *fp; 
+    uint64_t val; 
+    uint16_t port; 
+    int32_t baseid,len,n,extralen = 0;
+
     IS_KOMODO_NOTARY = GetBoolArg("-notary", false);
 
-    if ( GetBoolArg("-gen", false) != 0 )\
+    if ( GetBoolArg("-gen", false) != 0 )
     {
         KOMODO_MININGTHREADS = GetArg("-genproclimit",-1);
         if (KOMODO_MININGTHREADS == 0)
@@ -1670,7 +1714,7 @@ void komodo_args(char *argv0)
         USE_EXTERNAL_PUBKEY = 1;
         if ( IS_KOMODO_NOTARY == 0 )
         {
-            for (i=0; i<64; i++)
+            for (int i=0; i<64; i++)
                 if ( strcmp(NOTARY_PUBKEY.c_str(),Notaries_elected1[i][1]) == 0 )
                 {
                     IS_KOMODO_NOTARY = 1;
@@ -1680,11 +1724,15 @@ void komodo_args(char *argv0)
         }
         //KOMODO_PAX = 1;
     } //else KOMODO_PAX = GetArg("-pax",0);
-    name = GetArg("-ac_name","");
+
+    // either the testmode parameter or calling this chain VRSCTEST will put us into testmode
+    PBAAS_TESTMODE = GetBoolArg("-testmode", true);
+
+    /*
     if ( argv0 != 0 )
     {
         len = (int32_t)strlen(argv0);
-        for (i=0; i<sizeof(argv0suffix)/sizeof(*argv0suffix); i++)
+        for (int i = 0; i < sizeof(argv0suffix)/sizeof(*argv0suffix); i++)
         {
             n = (int32_t)strlen(argv0suffix[i]);
             if ( strcmp(&argv0[len - n],argv0suffix[i]) == 0 )
@@ -1695,93 +1743,229 @@ void komodo_args(char *argv0)
             }
         }
     }
+    */
+
+    // setting test mode also prevents the name of this chain from being set to VRSC
+    name = GetArg("-chain", name == "" ? "VRSC" : name);
+    name = GetArg("-ac_name", name);
+    if (PBAAS_TESTMODE && name == "VRSC")
+    {
+        PBAAS_TESTMODE = false;
+    }
+    else if (name == "VRSCTEST" && !PBAAS_TESTMODE)
+    {
+        PBAAS_TESTMODE = true;
+    }
+
+    mapArgs["-ac_name"] = name;
+
+    bool paramsLoaded = false;
+
+    if (name == "VRSC")
+    {
+        // first setup Verus parameters
+        mapArgs["-ac_algo"] = "verushash";
+        mapArgs["-ac_cc"] = "1";
+        mapArgs["-ac_supply"] = "0";
+        mapArgs["-ac_eras"] = "3";
+        mapArgs["-ac_reward"] = "0,38400000000,2400000000";
+        mapArgs["-ac_halving"] = "1,43200,1051920";
+        mapArgs["-ac_decay"] = "100000000,0,0";
+        mapArgs["-ac_end"] = "10080,226080,0";
+        mapArgs["-ac_timelockgte"] = "19200000000";
+        mapArgs["-ac_timeunlockfrom"] = "129600";
+        mapArgs["-ac_timeunlockto"] = "1180800";
+        mapArgs["-ac_veruspos"] = "50";
+
+        if (!ReadConfigFile("VRSC", mapArgs, mapMultiArgs))
+        {
+            LogPrintf("Config file for %s not found.\n", name.c_str());
+        }
+    }
+    else if (name == "VRSCTEST")
+    {
+        // setup Verus test parameters
+        mapArgs["-ac_algo"] = "verushash";
+        mapArgs["-ac_cc"] = "1";
+        mapArgs["-ac_supply"] = "0";
+        mapArgs["-ac_eras"] = "3";
+        mapArgs["-ac_reward"] = "50000000000,38400000000,38400000000";
+        mapArgs["-ac_halving"] = GetArg("-ac_halving", "1,43200,43209");    // allow testing easily with different default ports
+        mapArgs["-ac_decay"] = "100000000,0,0";
+        mapArgs["-ac_end"] = "10080,226080,0";
+        mapArgs["-ac_veruspos"] = "50";
+
+        if (!ReadConfigFile("VRSCTEST", mapArgs, mapMultiArgs))
+        {
+            LogPrintf("Config file for %s not found.\n", name.c_str());
+        }
+    }
+    else
+    {
+        // this is a PBaaS chain, so look for an installation on the local file system or check the Verus daemon if it's running
+        // printf("Reading config file for %s\n", name.c_str());
+        if (!ReadConfigFile(name, mapArgs, mapMultiArgs))
+        {
+            map<string, string> settings;
+            map<string, vector<string>> settingsmulti;
+
+            // if we are requested to automatically load the information from the Verus chain, do it if we can find the daemon
+            if (ReadConfigFile(PBAAS_TESTMODE ? "VRSCTEST" : "VRSC", settings, settingsmulti))
+            {
+                auto user = settingsmulti.find("-rpcuser");
+                auto pwd = settingsmulti.find("-rpcpassword");
+                auto host = settingsmulti.find("-rpchost");
+                auto port = settingsmulti.find("-rpcport");
+                auto multiEnd = settingsmulti.end();
+                PBAAS_USERPASS = (user == multiEnd ? "" : user->second[0]) + ":" + ((pwd == multiEnd) ? "" : pwd->second[0]);
+                PBAAS_PORT = port == multiEnd ? 0 : atoi(port->second[0]);
+                PBAAS_HOST = host == multiEnd ? "" : host->second[0];
+                if (!PBAAS_HOST.size())
+                {
+                    PBAAS_HOST = "127.0.0.1";
+                }
+                UniValue params(UniValue::VARR);
+                params.push_back(name);
+
+                UniValue result;
+                try
+                {
+                    result = RPCCallRoot("getchaindefinition", params);
+                    // set local parameters
+                    result = find_value(result, "result");
+                    if (result.isNull() || !SetThisChain(result))
+                    {
+                        throw error("Cannot find chain data");
+                    }
+                    name = string(ASSETCHAINS_SYMBOL);
+                    paramsLoaded = true;
+                }
+                catch(const std::exception& e)
+                {
+                    if (result.size() > 0)
+                    {
+                        // load the mapArgs from the chain definition
+                        printf("getchaindefinition result:\n");
+                        auto keys = result.getKeys();
+                        auto values = result.getValues();
+                        for (int i = 0; i < keys.size(); i++)
+                        {
+                            printf("%s : %s\n", keys[i].c_str(), values[i].getValStr().c_str());
+                        }
+                    }
+                    printf("Failure to read chain definition from config file or %s blockchain.\n", PBAAS_TESTMODE ? "VRSCTEST" : "VRSC");
+                    printf("Cannot load config\n");
+                    exit(1);
+                }
+            }
+            else
+            {
+                printf("Config file for %s not found. Cannot load %s information from blockchain.\n", PBAAS_TESTMODE ? "VRSCTEST" : "VRSC", name.c_str());
+                exit(1);
+            }
+        }
+    }
+
+    VERUS_CHAINNAME = PBAAS_TESTMODE ? "VRSCTEST" : "VRSC";
+    VERUS_CHAINID = CCrossChainRPCData::GetChainID(VERUS_CHAINNAME);
+
+    /*
     KOMODO_STOPAT = GetArg("-stopat",0);
-    ASSETCHAINS_CC = GetArg("-ac_cc",0);
+    ASSETCHAINS_CC = GetArg("-ac_cc",1);
     KOMODO_CCACTIVATE = GetArg("-ac_ccactivate",0);
     ASSETCHAINS_PUBLIC = GetArg("-ac_public",0);
     ASSETCHAINS_PRIVATE = GetArg("-ac_private",0);
+    */
+    KOMODO_STOPAT = 0;
+    ASSETCHAINS_CC = 1;
+    KOMODO_CCACTIVATE = 0;
+    ASSETCHAINS_PUBLIC = 0;
+    ASSETCHAINS_PRIVATE = 0;
+   
     if ( (KOMODO_REWIND= GetArg("-rewind",0)) != 0 )
     {
         printf("KOMODO_REWIND %d\n",KOMODO_REWIND);
     }
-    if ( name.c_str()[0] != 0 )
+
+    if ( name.size() )
     {
-        std::string selectedAlgo = GetArg("-ac_algo", std::string(ASSETCHAINS_ALGORITHMS[0]));
-
-        for ( int i = 0; i < ASSETCHAINS_NUMALGOS; i++ )
+        
+        if (!paramsLoaded)
         {
-            if (std::string(ASSETCHAINS_ALGORITHMS[i]) == selectedAlgo)
+            std::string selectedAlgo = GetArg("-ac_algo", std::string(ASSETCHAINS_ALGORITHMS[1]));
+
+            int i;
+            for (i = 0; i < ASSETCHAINS_NUMALGOS; i++ ) // i is declared above and not tested properly below
             {
-                ASSETCHAINS_ALGO = i;
-                // only worth mentioning if it's not equihash
-                if (ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH)
-                    printf("ASSETCHAINS_ALGO, algorithm set to %s\n", selectedAlgo.c_str());
-                break;
+                if (std::string(ASSETCHAINS_ALGORITHMS[i]) == selectedAlgo)
+                {
+                    ASSETCHAINS_ALGO = i;
+                    break;
+                }
             }
-        }
-        if (i == ASSETCHAINS_NUMALGOS)
-        {
-            printf("ASSETCHAINS_ALGO, %s not supported. using equihash\n", selectedAlgo.c_str());
-        }
-
-        ASSETCHAINS_LASTERA = GetArg("-ac_eras", 1);
-        if ( ASSETCHAINS_LASTERA < 1 || ASSETCHAINS_LASTERA > ASSETCHAINS_MAX_ERAS )
-        {
-            ASSETCHAINS_LASTERA = 1;
-            printf("ASSETCHAINS_LASTERA, if specified, must be between 1 and %u. ASSETCHAINS_LASTERA set to %u\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
-        }
-        ASSETCHAINS_LASTERA -= 1;
-
-        ASSETCHAINS_TIMELOCKGTE = (uint64_t)GetArg("-ac_timelockgte", _ASSETCHAINS_TIMELOCKOFF);
-        ASSETCHAINS_TIMEUNLOCKFROM = GetArg("-ac_timeunlockfrom", 0);
-        ASSETCHAINS_TIMEUNLOCKTO = GetArg("-ac_timeunlockto", 0);
-        if ( ASSETCHAINS_TIMEUNLOCKFROM > ASSETCHAINS_TIMEUNLOCKTO )
-        {
-            printf("ASSETCHAINS_TIMELOCKGTE - must specify valid ac_timeunlockfrom and ac_timeunlockto\n");
-            ASSETCHAINS_TIMELOCKGTE = _ASSETCHAINS_TIMELOCKOFF;
-            ASSETCHAINS_TIMEUNLOCKFROM = ASSETCHAINS_TIMEUNLOCKTO = 0;
-        }
-
-        Split(GetArg("-ac_end",""),  ASSETCHAINS_ENDSUBSIDY, 0);
-        Split(GetArg("-ac_reward",""),  ASSETCHAINS_REWARD, 0);
-        Split(GetArg("-ac_halving",""),  ASSETCHAINS_HALVING, 0);
-        Split(GetArg("-ac_decay",""),  ASSETCHAINS_DECAY, 0);
-
-        for ( int i = 0; i < ASSETCHAINS_MAX_ERAS; i++ )
-        {
-            if ( ASSETCHAINS_DECAY[i] == 100000000 && ASSETCHAINS_ENDSUBSIDY == 0 )
+            if (i == ASSETCHAINS_NUMALGOS)
             {
-                ASSETCHAINS_DECAY[i] = 0;
-                printf("ERA%u: ASSETCHAINS_DECAY of 100000000 means linear and that needs ASSETCHAINS_ENDSUBSIDY\n", i);
+                printf("ASSETCHAINS_ALGO, %s not supported. using VerusHash\n", selectedAlgo.c_str());
             }
-            else if ( ASSETCHAINS_DECAY[i] > 100000000 )
+
+            ASSETCHAINS_LASTERA = GetArg("-ac_eras", 1);
+            if ( ASSETCHAINS_LASTERA < 1 || ASSETCHAINS_LASTERA > ASSETCHAINS_MAX_ERAS )
             {
-                ASSETCHAINS_DECAY[i] = 0;
-                printf("ERA%u: ASSETCHAINS_DECAY cant be more than 100000000\n", i);
+                ASSETCHAINS_LASTERA = 1;
+                printf("ac_eras, if specified, must be between 1 and %u. ac_eras set to %u\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
             }
+            ASSETCHAINS_LASTERA -= 1;
+
+            ASSETCHAINS_TIMELOCKGTE = (uint64_t)GetArg("-ac_timelockgte", _ASSETCHAINS_TIMELOCKOFF);
+            ASSETCHAINS_TIMEUNLOCKFROM = GetArg("-ac_timeunlockfrom", 0);
+            ASSETCHAINS_TIMEUNLOCKTO = GetArg("-ac_timeunlockto", 0);
+            if ( ASSETCHAINS_TIMEUNLOCKFROM > ASSETCHAINS_TIMEUNLOCKTO )
+            {
+                printf("ASSETCHAINS_TIMELOCKGTE - must specify valid ac_timeunlockfrom and ac_timeunlockto\n");
+                ASSETCHAINS_TIMELOCKGTE = _ASSETCHAINS_TIMELOCKOFF;
+                ASSETCHAINS_TIMEUNLOCKFROM = ASSETCHAINS_TIMEUNLOCKTO = 0;
+            }
+
+            Split(GetArg("-ac_end",""),  ASSETCHAINS_ENDSUBSIDY, 0);
+            Split(GetArg("-ac_reward",""),  ASSETCHAINS_REWARD, 0);
+            Split(GetArg("-ac_halving",""),  ASSETCHAINS_HALVING, 0);
+            Split(GetArg("-ac_decay",""),  ASSETCHAINS_DECAY, 0);
+
+            for (int j = 0; j < ASSETCHAINS_LASTERA; j++)
+            {
+                if ( ASSETCHAINS_DECAY[j] == 100000000 && ASSETCHAINS_ENDSUBSIDY[0] == 0 )
+                {
+                    ASSETCHAINS_DECAY[j] = 0;
+                    printf("ERA%u: ASSETCHAINS_DECAY of 100000000 means linear and that needs ASSETCHAINS_ENDSUBSIDY\n", j);
+                }
+                else if ( ASSETCHAINS_DECAY[j] > 100000000 )
+                {
+                    ASSETCHAINS_DECAY[j] = 0;
+                    printf("ERA%u: ASSETCHAINS_DECAY cant be more than 100000000\n", j);
+                }
+            }
+
+            if ( (ASSETCHAINS_STAKED= GetArg("-ac_staked",0)) > 100 )
+                ASSETCHAINS_STAKED = 100;
+
+            // for now, we only support 50% PoS due to other parts of the algorithm needing adjustment for
+            // other values
+            if ( (ASSETCHAINS_LWMAPOS = GetArg("-ac_veruspos", 50)) != 0 )
+                ASSETCHAINS_LWMAPOS = 50;
+
+            ASSETCHAINS_SUPPLY = GetArg("-ac_supply", 0);
+
+            PBAAS_STARTBLOCK = GetArg("-startblock", 0);
+            PBAAS_ENDBLOCK = GetArg("-endblock", 0);
+
+            ASSETCHAINS_RPCHOST = GetArg("-rpchost", "127.0.0.1");
         }
 
         MAX_BLOCK_SIGOPS = 60000;
-        ASSETCHAINS_SUPPLY = GetArg("-ac_supply",10);
         ASSETCHAINS_COMMISSION = GetArg("-ac_perc",0);
         ASSETCHAINS_OVERRIDE_PUBKEY = GetArg("-ac_pubkey","");
-        if ( (ASSETCHAINS_STAKED= GetArg("-ac_staked",0)) > 100 )
-            ASSETCHAINS_STAKED = 100;
-
-        // for now, we only support 50% PoS due to other parts of the algorithm needing adjustment for
-        // other values
-        if ( (ASSETCHAINS_LWMAPOS = GetArg("-ac_veruspos",0)) != 0 )
-            ASSETCHAINS_LWMAPOS = 50;
-        
-        ASSETCHAINS_SAPLING = GetArg("-ac_sapling", -1);
-        if (ASSETCHAINS_SAPLING == -1)
-        {
-            ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", -1);
-        }
-        else
-        {
-            ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", ASSETCHAINS_SAPLING);
-        }
+        ASSETCHAINS_SAPLING = 1;
+        ASSETCHAINS_OVERWINTER = 1;
 
         if ( strlen(ASSETCHAINS_OVERRIDE_PUBKEY.c_str()) == 66 && ASSETCHAINS_COMMISSION > 0 && ASSETCHAINS_COMMISSION <= 100000000 )
             decode_hex(ASSETCHAINS_OVERRIDE_PUBKEY33,33,(char *)ASSETCHAINS_OVERRIDE_PUBKEY.c_str());
@@ -1793,7 +1977,7 @@ void komodo_args(char *argv0)
 
         if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 || ASSETCHAINS_REWARD[0] != 0 || ASSETCHAINS_HALVING[0] != 0 || ASSETCHAINS_DECAY[0] != 0 || ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_PUBLIC != 0 || ASSETCHAINS_PRIVATE != 0 )
         {
-            printf("perc.%llu\n",(long long)ASSETCHAINS_COMMISSION);
+            // printf("perc.%llu\n",(long long)ASSETCHAINS_COMMISSION);
 
             extraptr = extrabuf;
             memcpy(extraptr,ASSETCHAINS_OVERRIDE_PUBKEY33,33), extralen = 33;
@@ -1801,11 +1985,11 @@ void komodo_args(char *argv0)
             // if we have one era, this should create the same data structure as it used to, same if we increase _MAX_ERAS
             for ( int i = 0; i <= ASSETCHAINS_LASTERA; i++ )
             {
-                printf("ERA%u: end.%llu reward.%llu halving.%llu decay.%llu\n", i,
-                       (long long)ASSETCHAINS_ENDSUBSIDY[i],
-                       (long long)ASSETCHAINS_REWARD[i],
-                       (long long)ASSETCHAINS_HALVING[i],
-                       (long long)ASSETCHAINS_DECAY[i]);
+                //printf("ERA%u: end.%llu reward.%llu halving.%llu decay.%llu\n", i,
+                //       (long long)ASSETCHAINS_ENDSUBSIDY[i],
+                //       (long long)ASSETCHAINS_REWARD[i],
+                //       (long long)ASSETCHAINS_HALVING[i],
+                //       (long long)ASSETCHAINS_DECAY[i]);
 
                 // TODO: Verify that we don't overrun extrabuf here, which is a 256 byte buffer
                 extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_ENDSUBSIDY[i]),(void *)&ASSETCHAINS_ENDSUBSIDY[i]);
@@ -1838,6 +2022,12 @@ void komodo_args(char *argv0)
                 extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_LWMAPOS),(void *)&ASSETCHAINS_LWMAPOS);
             }
 
+            if ( PBAAS_STARTBLOCK || PBAAS_ENDBLOCK )
+            {
+                extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(PBAAS_STARTBLOCK),(void *)&PBAAS_STARTBLOCK);
+                extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(PBAAS_ENDBLOCK),(void *)&PBAAS_ENDBLOCK);
+            }
+
             val = ASSETCHAINS_COMMISSION | (((uint64_t)ASSETCHAINS_STAKED & 0xff) << 32) | (((uint64_t)ASSETCHAINS_CC & 0xffff) << 40) | ((ASSETCHAINS_PUBLIC != 0) << 7) | ((ASSETCHAINS_PRIVATE != 0) << 6);
             extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(val),(void *)&val);
         }
@@ -1845,12 +2035,17 @@ void komodo_args(char *argv0)
         addn = GetArg("-seednode","");
         if ( strlen(addn.c_str()) > 0 )
             ASSETCHAINS_SEED = 1;
-        strncpy(ASSETCHAINS_SYMBOL,name.c_str(),sizeof(ASSETCHAINS_SYMBOL)-1);
+
+        memset(ASSETCHAINS_SYMBOL, 0, sizeof(ASSETCHAINS_SYMBOL));
+        strcpy(ASSETCHAINS_SYMBOL, name.c_str());
+
+        ASSETCHAINS_CHAINID = CCrossChainRPCData::GetChainID(std::string(ASSETCHAINS_SYMBOL));
 
         MAX_MONEY = komodo_max_money();
 
         //printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
         ASSETCHAINS_P2PPORT = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
+
         while ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
         {
             fprintf(stderr,"waiting for datadir\n");
@@ -1865,19 +2060,27 @@ void komodo_args(char *argv0)
         {
             int32_t komodo_baseid(char *origbase);
             extern int COINBASE_MATURITY;
-            if ( (port= komodo_userpass(ASSETCHAINS_USERPASS,ASSETCHAINS_SYMBOL)) != 0 )
+            if ( (port= komodo_userpass(ASSETCHAINS_USERPASS, ASSETCHAINS_SYMBOL)) != 0 )
+            {
                 ASSETCHAINS_RPCPORT = port;
-            else komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
+            }
+            else 
+            {
+                komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
+                komodo_userpass(ASSETCHAINS_USERPASS, ASSETCHAINS_SYMBOL);      // make sure we set user and password on first load
+            }
+
             if (ASSETCHAINS_LASTERA == 0 && ASSETCHAINS_REWARD[0] == 0)
                 COINBASE_MATURITY = 1;
             //fprintf(stderr,"ASSETCHAINS_RPCPORT (%s) %u\n",ASSETCHAINS_SYMBOL,ASSETCHAINS_RPCPORT);
+            ASSETCHAINS_RPCHOST = GetArg("-rpchost", "127.0.0.1");
         }
         if ( ASSETCHAINS_RPCPORT == 0 )
             ASSETCHAINS_RPCPORT = ASSETCHAINS_P2PPORT + 1;
         //ASSETCHAINS_NOTARIES = GetArg("-ac_notaries","");
         //komodo_assetchain_pubkeys((char *)ASSETCHAINS_NOTARIES.c_str());
         iguana_rwnum(1,magic,sizeof(ASSETCHAINS_MAGIC),(void *)&ASSETCHAINS_MAGIC);
-        for (i=0; i<4; i++)
+        for (int i=0; i<4; i++)
             sprintf(&magicstr[i<<1],"%02x",magic[i]);
         magicstr[8] = 0;
 #ifndef FROM_CLI
@@ -1893,6 +2096,45 @@ void komodo_args(char *argv0)
         {
             ASSETCHAINS_CC = 2;
             fprintf(stderr,"smart utxo CC contracts will activate at height.%d\n",KOMODO_CCACTIVATE);
+        }
+
+        ASSETCHAINS_RPCCREDENTIALS = string(ASSETCHAINS_USERPASS);
+
+        if (!paramsLoaded)
+        {
+            // we need to set the chain definition for this chain based on globals set above
+            UniValue obj(UniValue::VOBJ);
+
+            obj.push_back(Pair("premine", ASSETCHAINS_SUPPLY));
+            obj.push_back(Pair("name", ASSETCHAINS_SYMBOL));
+
+            obj.push_back(Pair("startblock", PBAAS_STARTBLOCK));
+            obj.push_back(Pair("endblock", PBAAS_ENDBLOCK));
+
+            UniValue eras(UniValue::VARR);
+            for (int i = 0; i <= ASSETCHAINS_LASTERA; i++)
+            {
+                UniValue era(UniValue::VOBJ);
+                era.push_back(Pair("reward", ASSETCHAINS_REWARD[i]));
+                era.push_back(Pair("decay", ASSETCHAINS_DECAY[i]));
+                era.push_back(Pair("halving", ASSETCHAINS_HALVING[i]));
+                era.push_back(Pair("eraend", ASSETCHAINS_ENDSUBSIDY[i]));
+                eras.push_back(era);
+            }
+            obj.push_back(Pair("eras", eras));
+
+            /* We need to store node information here
+            UniValue nodes(UniValue::VARR);
+            {
+                UniValue node(UniValue::VOBJ);
+                node.push_back(Pair("networkaddress", ));
+                node.push_back(Pair("paymentaddress", ));
+            }
+            obj.push_back(Pair("nodes", nodes));
+            */
+
+            SetThisChain(obj);
+            paramsLoaded = true;
         }
     }
     else

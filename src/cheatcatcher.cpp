@@ -30,7 +30,7 @@ uint32_t CCheatList::Prune(uint32_t height)
     if (height > 0 && NetworkUpgradeActive(height, Params().GetConsensus(), Consensus::UPGRADE_SAPLING))
     {
         LOCK(cs_cheat);
-        for (auto it = orderedCheatCandidates.begin(); it != orderedCheatCandidates.end() && it->second.height <= height; it--)
+        for (auto it = orderedCheatCandidates.begin(); it != orderedCheatCandidates.end() && it->second.height <= height; it++)
         {
             toPrune.push_back(&it->second);
         }

@@ -10,6 +10,9 @@
 
 #include "komodo_defs.h"
 char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+bool PBAAS_TESTMODE;
+uint160 ASSETCHAINS_CHAINID;
+uint160 VERUS_CHAINID;
 int64_t MAX_MONEY = 200000000 * 100000000LL;
 uint64_t ASSETCHAINS_SUPPLY;
 uint16_t BITCOIND_RPCPORT = 7771;
@@ -335,6 +338,9 @@ int main(int argc, char* argv[])
     bool fDumpPass = GetBoolArg("-dumppass", false);
     bool help = GetBoolArg("-h", false);
     bool result = false;
+
+    PBAAS_TESTMODE = false;
+
 
     if (help)
     {

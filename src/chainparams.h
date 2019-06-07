@@ -145,6 +145,7 @@ protected:
  * startup, except for unit tests.
  */
 const CChainParams &Params();
+bool AreParamsInitialized();
 
 /** Return parameters for the given network. */
 CChainParams &Params(CBaseChainParams::Network network);

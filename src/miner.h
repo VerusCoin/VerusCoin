@@ -39,7 +39,7 @@ CBlockTemplate* CreateNewBlockWithKey();
 
 #ifdef ENABLE_MINING
 /** Modify the extranonce in a block */
-void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
+void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce, bool buildMerkle = true, uint32_t *pSaveBits = NULL);
 /** Run the miner threads */
  #ifdef ENABLE_WALLET
 void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads);

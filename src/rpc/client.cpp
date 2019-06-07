@@ -21,6 +21,14 @@ public:
     int paramIdx;                      //! 0-based idx of param to convert
 };
 
+// dummy for linking - used only in server
+UniValue RPCCall(const string& strMethod, const UniValue& params, const string credentials, int port, const string host, int timeout)
+{assert(false);}
+UniValue RPCCallRoot(const string& strMethod, const UniValue& params, int timeout)
+{return NullUniValue;}
+bool SetThisChain(UniValue &chainDefinition)
+{}
+
 static const CRPCConvertParam vRPCConvertParams[] =
 {
     { "stop", 0 },
@@ -154,6 +162,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getproofroot", 2},
     { "height_MoM", 1},
     { "calc_MoM", 2},
+    // pbaas
+    { "definechain", 0},
+    { "getdefinedchains", 0},
 };
 
 class CRPCConvertTable

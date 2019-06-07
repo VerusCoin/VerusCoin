@@ -13,6 +13,7 @@
 #include "init.h"
 #include "key_io.h"
 #include "main.h"
+#include "mmr.h"
 #include "net.h"
 #include "rpc/protocol.h"
 #include "script/script.h"
@@ -49,6 +50,7 @@ extern int32_t USE_EXTERNAL_PUBKEY;
 extern std::string NOTARY_PUBKEY;
 extern int32_t KOMODO_EXCHANGEWALLET;
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+extern uint160 ASSETCHAINS_CHAINID;
 extern int32_t VERUS_MIN_STAKEAGE;
 CBlockIndex *komodo_chainactive(int32_t height);
 extern std::string DONATION_PUBKEY;
@@ -1333,25 +1335,46 @@ bool CWallet::VerusSelectStakeOutput(CBlock *pBlock, arith_uint256 &hashResult, 
     pBlock->nNonce.SetPOSTarget(bnTarget, pBlock->nVersion);
     target.SetCompact(bnTarget);
 
-    pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, false);
+    auto consensusParams = Params().GetConsensus();
+    CValidationState state;
+
+    pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, !consensusParams.fCoinbaseMustBeProtected);
 
     if (pastBlockIndex = komodo_chainactive(nHeight - 100))
     {
-        CBlockHeader bh = pastBlockIndex->GetBlockHeader();
-        uint256 pastHash = bh.GetVerusEntropyHash(nHeight - 100);
+        uint256 pastHash = pastBlockIndex->GetVerusEntropyHash();
         CPOSNonce curNonce;
+        uint32_t srcIndex;
 
         BOOST_FOREACH(COutput &txout, vecOutputs)
         {
             if (txout.fSpendable && (UintToArith256(txout.tx->GetVerusPOSHash(&(pBlock->nNonce), txout.i, nHeight, pastHash)) <= target) && (txout.nDepth >= VERUS_MIN_STAKEAGE))
             {
-                if ((!pwinner || UintToArith256(curNonce) > UintToArith256(pBlock->nNonce)) &&
+                CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+                int32_t txSize = GetSerializeSize(s, *(CTransaction *)txout.tx);
+
+                //printf("Serialized size of transaction %s is %lu\n", txout.tx->GetHash().GetHex().c_str(), txSize);
+                if (txSize > MAX_TX_SIZE_FOR_STAKING)
+                {
+                    LogPrintf("Transaction %s is too large to stake. Serialized size == %lu\n", txout.tx->GetHash().GetHex().c_str(), txSize);
+                }
+
+                CCoinsViewCache view(pcoinsTip);
+                CMutableTransaction checkStakeTx = CreateNewContextualCMutableTransaction(consensusParams, nHeight);
+                uint256 txHash = txout.tx->GetHash();
+                checkStakeTx.vin.push_back(CTxIn(COutPoint(txHash, txout.i)));
+
+                if (txSize <= MAX_TX_SIZE_FOR_STAKING &&
+                    (!pwinner || UintToArith256(curNonce) > UintToArith256(pBlock->nNonce)) &&
                     (Solver(txout.tx->vout[txout.i].scriptPubKey, whichType, vSolutions) && (whichType == TX_PUBKEY || whichType == TX_PUBKEYHASH)) &&
-                    !cheatList.IsUTXOInList(COutPoint(txout.tx->GetHash(), txout.i), nHeight <= 100 ? 1 : nHeight-100))
+                    !cheatList.IsUTXOInList(COutPoint(txHash, txout.i), nHeight <= 100 ? 1 : nHeight-100) &&
+                    view.AccessCoins(txHash) &&
+                    Consensus::CheckTxInputs(checkStakeTx, state, view, nHeight, consensusParams))
                 {
                     //printf("Found PoS block\nnNonce:    %s\n", pBlock->nNonce.GetHex().c_str());
                     pwinner = &txout;
                     curNonce = pBlock->nNonce;
+                    srcIndex = (nHeight - txout.nDepth) - 1;
                 }
             }
         }
@@ -1361,23 +1384,64 @@ bool CWallet::VerusSelectStakeOutput(CBlock *pBlock, arith_uint256 &hashResult, 
             voutNum = pwinner->i;
             pBlock->nNonce = curNonce;
 
-            if (CConstVerusSolutionVector::activationHeight.ActiveVersion(nHeight) > CActivationHeight::SOLUTION_VERUSV2)
+            if (CConstVerusSolutionVector::activationHeight.ActiveVersion(nHeight) == CActivationHeight::SOLUTION_VERUSV3)
             {
                 CDataStream txStream = CDataStream(SER_NETWORK, PROTOCOL_VERSION);
-                std::vector<unsigned char> exData;
 
-                // store entire source transaction in header
-                txStream << *(CMerkleTx *)pwinner->tx;
+                // store:
+                // 1. PBaaS header for this block
+                // 2. source transaction
+                // 3. block index of base MMR being used
+                // 4. source tx block index for proof
+                // 5. full merkle proof of source tx up to prior MMR root
+                // 6. block hash of block of entropyhash
+                // 7. proof of block hash (not full header) in the MMR for the block height of the entropy hash block
+                // all that data includes enough information to verify
+                // prior MMR, blockhash, transaction, entropy hash, and block indexes match
+                // also checks root match & block power
+                auto view = chainActive.GetMMV();
+                pBlock->AddUpdatePBaaSHeader(view.GetRoot());
 
-                // make the extra data exactly the size of the source merkletx
-                pBlock->nSolution.resize((pBlock->nSolution.size() + (txStream.end() - txStream.begin())) - exData.size());
-                pBlock->GetExtraData(exData);
+                txStream << *(CTransaction *)pwinner->tx;
 
-                std::vector<unsigned char> stx = std::vector<unsigned char>(txStream.begin(), txStream.end());
-                printf("\nFound Stake transaction... MerkleTx serialized size == %d\n", stx.size());
-                memcpy(exData.data(), stx.data(), stx.size());
+                // start with the tx proof
+                CMerkleBranch branch(pwinner->tx->nIndex, pwinner->tx->vMerkleBranch);
 
-                pBlock->SetExtraData(exData.data(), exData.size());
+                // add the Merkle proof bridge to the MMR
+                chainActive[srcIndex]->AddMerkleProofBridge(branch);
+
+                // use the block that we got entropy hash from as the validating block
+                // which immediately provides all but unspent proof for PoS block
+                view.resize(pastBlockIndex->GetHeight());
+
+                view.GetProof(branch, srcIndex);
+
+                // store block height of MMR root, block index of entry, and full blockchain proof of transaction with that root
+                txStream << pastBlockIndex->GetHeight();
+                txStream << srcIndex;
+                txStream << branch;
+
+                // now we get a fresh branch for the block proof
+                branch = CMerkleBranch();
+
+                // prove the block 100 blocks ago with its coincident MMR
+                // it must hash to the same value with a different path, providing both a consistency check and
+                // an asserted MMR root for the n - 100 block if matched
+                pastBlockIndex->AddBlockProofBridge(branch);
+                view.GetProof(branch, pastBlockIndex->GetHeight());
+
+                // block proof of the same block using the MMR of that block height, so we don't need to add additional data
+                // beyond the block hash.
+                txStream << pastBlockIndex->GetBlockHash();
+                txStream << branch;
+
+                std::vector<unsigned char> stx(txStream.begin(), txStream.end());
+
+                // printf("\nFound Stake transaction... all proof serialized size == %lu\n", stx.size());
+
+                CVerusSolutionVector(pBlock->nSolution).ResizeExtraData(stx.size());
+
+                pBlock->SetExtraData(stx.data(), stx.size());
             }
             return true;
         }
@@ -1501,25 +1565,6 @@ int32_t CWallet::VerusStakeTransaction(CBlock *pBlock, CMutableTransaction &txNe
         siglen = sigdata.scriptSig.size();
         for (int i=0; i<siglen; i++)
             utxosig[i] = ptr[i];//, fprintf(stderr,"%02x",ptr[i]);
-        if (CConstVerusSolutionVector::activationHeight.ActiveVersion(stakeHeight) > CActivationHeight::SOLUTION_VERUSV2)
-        {
-            std::vector<unsigned char> exData;
-            pBlock->GetExtraData(exData);
-            CDataStream txStream = CDataStream(exData, SER_NETWORK, PROTOCOL_VERSION);
-
-            // add spend transaction to header
-            txStream << CTransaction(txNew);
-
-            // make the extra data at least the size of the stream
-            pBlock->ResizeExtraData(txStream.end() - txStream.begin());
-            pBlock->GetExtraData(exData);
-
-            std::vector<unsigned char> stx = std::vector<unsigned char>(txStream.begin(), txStream.end());
-            printf("\nFound Stake transaction... MerkleTx serialized size == %d\n", stx.size());
-            memcpy(exData.data(), stx.data(), stx.size());
-
-            pBlock->SetExtraData(exData.data(), exData.size());
-        }
     }
     return(siglen);
 }
@@ -2267,16 +2312,16 @@ isminetype CWallet::IsMine(const CTransaction& tx, uint32_t voutNum)
                         return ret;
                 }
             }
-            else if (tx.vout.size() > (voutNext = voutNum + 1) &&
-                tx.vout[voutNext].scriptPubKey.size() > 7 &&
-                tx.vout[voutNext].scriptPubKey[0] == OP_RETURN)
+            else if (tx.vout.size() > (voutNum + 1) &&
+                tx.vout.back().scriptPubKey.size() > 7 &&
+                tx.vout.back().scriptPubKey[0] == OP_RETURN)
             {
                 // get the opret script from next vout, verify that the front is CLTV and hash matches
                 // if so, remove it and use the solver
                 opcodetype op;
                 std::vector<uint8_t> opretData;
-                CScript::const_iterator it = tx.vout[voutNext].scriptPubKey.begin() + 1;
-                if (tx.vout[voutNext].scriptPubKey.GetOp2(it, op, &opretData))
+                CScript::const_iterator it = tx.vout.back().scriptPubKey.begin() + 1;
+                if (tx.vout.back().scriptPubKey.GetOp2(it, op, &opretData))
                 {
                     if (opretData.size() > 0 && opretData[0] == OPRETTYPE_TIMELOCK)
                     {

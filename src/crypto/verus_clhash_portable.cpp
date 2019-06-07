@@ -721,7 +721,7 @@ bool mine_verus_v2_port(CBlockHeader &bh, CVerusHashV2bWriter &vhw, uint256 &fin
 		*((int64_t *)&(solution.data()[solution.size() - extraSpace])) = i;
         bh.nSolution = solution;
         finalHash = curHash;
-        *count = i - start;
+        *count = (i - start) + 1;
         return true;
 	}
 	return false;

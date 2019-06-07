@@ -52,6 +52,7 @@ extern bool fLogTimestamps;
 extern bool fLogIPs;
 extern std::atomic<bool> fReopenDebugLog;
 extern CTranslationInterface translationInterface;
+extern bool PBAAS_TESTMODE;
 
 [[noreturn]] extern void new_handler_terminate();
 
@@ -67,6 +68,8 @@ inline std::string _(const char* psz)
 
 void SetupEnvironment();
 bool SetupNetworking();
+
+bool _IsVerusActive();
 
 /** Return true if log accepts specified category */
 bool LogAcceptCategory(const char* category);
@@ -123,9 +126,12 @@ void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 bool TryCreateDirectory(const boost::filesystem::path& p);
 boost::filesystem::path GetDefaultDataDir();
+boost::filesystem::path GetDefaultDataDir(std::string chainName);
 const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
+const boost::filesystem::path GetDataDir(std::string chainName);
 void ClearDatadirCache();
 boost::filesystem::path GetConfigFile();
+boost::filesystem::path GetConfigFile(std::string chainName);
 #ifndef _WIN32
 boost::filesystem::path GetPidFile();
 void CreatePidFile(const boost::filesystem::path &path, pid_t pid);
@@ -135,6 +141,9 @@ public:
     missing_zcash_conf() : std::runtime_error("Missing komodo.conf") { }
 };
 void ReadConfigFile(std::map<std::string, std::string>& mapSettingsRet, std::map<std::string, std::vector<std::string> >& mapMultiSettingsRet);
+bool ReadConfigFile(std::string chainName,
+                    std::map<std::string, std::string>& mapSettingsRet,
+                    std::map<std::string, std::vector<std::string> >& mapMultiSettingsRet);
 #ifdef _WIN32
 boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate = true);
 #endif

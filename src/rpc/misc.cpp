@@ -56,7 +56,7 @@ uint32_t komodo_segid32(char *coinaddr);
 int64_t komodo_coinsupply(int64_t *zfundsp,int32_t height);
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
 #define KOMODO_VERSION "0.2.1"
-#define VERUS_VERSION "0.5.6a"
+#define VERUS_VERSION "0.6.0"
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 extern uint32_t ASSETCHAINS_CC;
 extern uint32_t ASSETCHAINS_MAGIC;
@@ -132,10 +132,10 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 #endif
     //fprintf(stderr,"after wallet %u\n",(uint32_t)time(NULL));
     obj.push_back(Pair("blocks",        (int)chainActive.Height()));
-    if ( (longestchain= KOMODO_LONGESTCHAIN) != 0 && chainActive.Height() > longestchain )
+    if ( (longestchain = KOMODO_LONGESTCHAIN) == 0 || chainActive.Height() > longestchain )
         longestchain = chainActive.Height();
     //fprintf(stderr,"after longestchain %u\n",(uint32_t)time(NULL));
-    obj.push_back(Pair("longestchain",        longestchain));
+    obj.push_back(Pair("longestchain",  longestchain));
     obj.push_back(Pair("timeoffset",    GetTimeOffset()));
     if ( chainActive.LastTip() != 0 )
         obj.push_back(Pair("tiptime", (int)chainActive.LastTip()->nTime));

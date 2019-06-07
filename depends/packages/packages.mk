@@ -1,7 +1,7 @@
 rust_packages := rust librustzcash
 
 ifeq ($(build_os),darwin)
-	zcash_packages := libsnark libgmp libsodium
+	zcash_packages :=  libgmp libsodium
 else
 	proton_packages := proton
 	zcash_packages := libgmp libsodium
@@ -52,3 +52,6 @@ else
 	packages := boost openssl libevent zeromq $(zcash_packages) libcurl googletest #googlemock
 endif
 
+ifdef STATIC_LIBCURL
+	packages := boost openssl libevent zeromq $(zcash_packages) libcurl googletest #googlemock
+endif

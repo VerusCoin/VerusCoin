@@ -57,7 +57,7 @@ src/univalue/gen
 *.pb.cc
 *.pb.h
 .vscode
-
+*.in
 *.log
 *.trs
 *.dmg
@@ -120,7 +120,16 @@ src/wallet-utility
 src/komodo-cli.exe
 src/komodod.exe
 src/komodo-tx.exe
-
+src/verusd
+src/verus
+src/verus-tx
+src/verusd.exe
+src/verus.exe
+src/verus-tx.exe
+Verus-CLI*
+verus-cli
+src/cryptoconditions/src/cryptoconditions-config.h*
+src/cryptoconditions/compile
 #output during builds, symbol tables?
 *.dSYM
 

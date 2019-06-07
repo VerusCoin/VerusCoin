@@ -19,6 +19,7 @@
 *.l[ao]
 *.[ao]
 *~
+*.in
 converter-sample.c
 config.*
 .pytest_cache

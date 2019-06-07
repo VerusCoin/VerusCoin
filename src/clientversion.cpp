@@ -55,7 +55,7 @@ const std::string CLIENT_NAME("MagicBean");
 #define GIT_COMMIT_DATE "Wed, 21 Feb 2018 16:15:11 +0200"
 #endif
 
-#define RENDER_BETA_STRING(num) "-beta" DO_STRINGIZE(num)
+#define RENDER_BETA_STRING(num) "-beta-" DO_STRINGIZE(num)
 #define RENDER_RC_STRING(num) "-rc" DO_STRINGIZE(num)
 #define RENDER_DEV_STRING(num) "-" DO_STRINGIZE(num)
 
@@ -104,7 +104,7 @@ const std::string CLIENT_DATE(BUILD_DATE);
 std::string FormatVersion(int nVersion)
 {
     if (nVersion % 100 < 25)
-        return strprintf("%d.%d.%d-beta%d", nVersion / 1000000, (nVersion / 10000) % 100, (nVersion / 100) % 100, (nVersion % 100)+1);
+        return strprintf("%d.%d.%d-PBaaS-Cross-chain-Technology-Preview-%d", nVersion / 1000000, (nVersion / 10000) % 100, (nVersion / 100) % 100, (nVersion % 100)+1);
     if (nVersion % 100 < 50)
         return strprintf("%d.%d.%d-rc%d", nVersion / 1000000, (nVersion / 10000) % 100, (nVersion / 100) % 100, (nVersion % 100)-24);
     else if (nVersion % 100 == 50)

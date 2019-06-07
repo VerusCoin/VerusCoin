@@ -1,6 +1,5 @@
 #include <windows.h>             // needed for VERSIONINFO
 #include "clientversion.h"       // holds the needed client version information
-
 #define VER_PRODUCTVERSION     CLIENT_VERSION_MAJOR,CLIENT_VERSION_MINOR,CLIENT_VERSION_REVISION,CLIENT_VERSION_BUILD
 #define VER_PRODUCTVERSION_STR STRINGIZE(CLIENT_VERSION_MAJOR) "." STRINGIZE(CLIENT_VERSION_MINOR) "." STRINGIZE(CLIENT_VERSION_REVISION) "." STRINGIZE(CLIENT_VERSION_BUILD)
 #define VER_FILEVERSION        VER_PRODUCTVERSION
@@ -16,14 +15,14 @@ BEGIN
     BEGIN
         BLOCK "040904E4" // U.S. English - multilingual (hex)
         BEGIN
-            VALUE "CompanyName",        "Komodo"
-            VALUE "FileDescription",    "komodod (Komodo node with a JSON-RPC server)"
+            VALUE "CompanyName",        "verus"
+            VALUE "FileDescription",    "verusd (Komodo node with a JSON-RPC server)"
             VALUE "FileVersion",        VER_FILEVERSION_STR
-            VALUE "InternalName",       "komodod"
+            VALUE "InternalName",       "verusd"
             VALUE "LegalCopyright",     COPYRIGHT_STR
             VALUE "LegalTrademarks1",   "Distributed under the MIT software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php."
-            VALUE "OriginalFilename",   "komodod.exe"
-            VALUE "ProductName",        "komodod"
+            VALUE "OriginalFilename",   "verusd.exe"
+            VALUE "ProductName",        "verusd"
             VALUE "ProductVersion",     VER_PRODUCTVERSION_STR
         END
     END

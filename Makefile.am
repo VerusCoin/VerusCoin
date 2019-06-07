@@ -13,8 +13,8 @@ pkgconfig_DATA = libzcashconsensus.pc
 endif
 
 
-BITCOIND_BIN=$(top_builddir)/src/komodod$(EXEEXT)
-BITCOIN_CLI_BIN=$(top_builddir)/src/komodo-cli$(EXEEXT)
+BITCOIND_BIN=$(top_builddir)/src/verusd$(EXEEXT)
+BITCOIN_CLI_BIN=$(top_builddir)/src/verus$(EXEEXT)
 #WALLET_UTILITY_BIN=$(top_builddir)/src/wallet-utility$(EXEEXT)
 BITCOIN_WIN_INSTALLER=$(PACKAGE)-$(PACKAGE_VERSION)-win$(WINDOWS_BITS)-setup$(EXEEXT)
 

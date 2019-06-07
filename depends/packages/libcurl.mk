@@ -1,8 +1,8 @@
 package=libcurl
-$(package)_version=7.54.0
+$(package)_version=7.64.1
 $(package)_download_path=https://curl.haxx.se/download
 $(package)_file_name=curl-$($(package)_version).tar.gz
-$(package)_sha256_hash=a84b635941c74e26cce69dd817489bec687eb1f230e7d1897fc5b5f108b59adf
+$(package)_sha256_hash=432d3f466644b9416bc5b649d344116a753aeaa520c8beaf024a90cba9d3d35d
 $(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix)
 $(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
 $(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix)
@@ -18,7 +18,6 @@ endif
 define $(package)_config_cmds
   $($(package)_conf_tool) $($(package)_config_opts)
 endef
-
 
 ifeq ($(build_os),darwin)
 define $(package)_build_cmds

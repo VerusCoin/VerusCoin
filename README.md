@@ -1,6 +1,4 @@
-## VerusCoin version 0.6+ unstable PBaaS branch
-
-This branch cannot yet be expected to work, but it may.
+## VerusCoin version 0.5.7
 
 Arguably the world's most advanced technology, zero knowledge privacy-centric blockchain, Verus Coin brings Sapling performance and zero knowledge features to an intelligent system with interchain smart contracts and a completely original, combined proof of stake/proof of work consensus algorithm that solves the nothing at stake problem. With this and its approach towards CPU mining and ASICs, Verus Coin strives to be one of the most naturally decentralizing and attack resistant blockchains in existence.
 
@@ -9,7 +7,7 @@ We have added a variation of a zawy12, lwma difficulty algorithm, a new CPU-opti
 Also see our [VerusCoin web site](https://veruscoin.io/) and [VerusCoin Explorer](https://explorer.veruscoin.io/).
 
 ## VerusCoin
-This software is the VerusCoin enhanced Komodo client. Generally, you will use this if you want to mine VRSC or setup a full node. When you run the wallet it launches komodod automatically. On first launch it downloads Zcash parameters, roughly 1GB, which is mildly slow.
+This software is the VerusCoin client. Generally, you will use this if you want to mine VRSC or setup a full node. When you run the wallet it launches komodod automatically. On first launch it downloads Zcash parameters, roughly 1GB, which is mildly slow.
 
 The wallet downloads and stores the block chain or asset chain of the coin you select. It downloads and stores the entire history of the coins transactions; depending on the speed of your computer and network connection, the synchronization process could take a day or more once the blockchain has reached a significant size.
 
@@ -71,7 +69,7 @@ Many VRSC innovations are now also available back in the Komodo fork:
 
 ```shell
 #The following packages are needed:
-sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python python-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl
+sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libcurl4-openssl-dev libtool ncurses-dev unzip git python python-zmq zlib1g-dev wget bsdmainutils automake curl
 ```
 
 
@@ -82,7 +80,7 @@ First time you'll need to get assorted startup values downloaded. This takes a m
 ```
 zcutil/fetch-params.sh
 ```
-Building for Ubuntu/Mint/Debian:
+Building for Linux:
 ```
 zcutil/build.sh
 ```
@@ -111,10 +109,10 @@ cd VerusCoin
 #This can take some time.
 ```
 
-**The VerusCoin enhanced komodo is experimental and a work-in-progress.** Use at your own risk.
+**VerusCoin is experimental and a work-in-progress.** Use at your own risk.
 
 #To view all commands
-./src/komodo-cli help
+./src/verus help
 
 #To view komodod output:
 tail -f ~/.komodo/debug.log
@@ -135,7 +133,7 @@ In some cases, messed up wallets can be recovered using this process
 - backup wallet.dat safely and securely
 - backup all privkeys (launch komodod with `-exportdir=<path>` and `dumpwallet`)
 - start a totally new sync including `wallet.dat`, launch with same `exportdir`
-- stop it before it gets too far and import all the privkeys from a) using `komodo-cli importwallet filename`
+- stop it before it gets too far and import all the privkeys from a) using `verus importwallet filename`
 - resume sync till it gets to chaintip
 
 For example:

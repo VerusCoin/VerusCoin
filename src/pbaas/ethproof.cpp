@@ -473,7 +473,7 @@ uint256 CPATRICIABranch<CHashWriter>::verifyStorageProof(uint256 ccExporthash){
     }
     else {
         
-        printf("PATRICIA Tree proof Account Matches\n");
+        LogPrintf("PATRICIA Tree proof Account Matches\n");
     
     }
     //run the storage proof

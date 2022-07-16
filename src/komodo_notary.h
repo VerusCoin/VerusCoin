@@ -411,6 +411,77 @@ const char *Notaries_elected5[][2] =
 	{"dragonhound_DEV", "02b3c168ed4acd96594288cee3114c77de51b6afe1ab6a866887a13a96ee80f33c"}
 };
 
+#define KOMODO_NOTARIES_TIMESTAMP6 1656077853 // Friday, June 24, 2022 (13:37:33 UTC)
+#define KOMODO_NOTARIES_HEIGHT6 ((2084866 / KOMODO_ELECTION_GAP) * KOMODO_ELECTION_GAP)
+
+const char *Notaries_elected6[][2] =
+(
+	{"blackice_DEV": "03e2de3418c88be0cfe2fa0dcfdaea001b5a36ad86e6833ad284d79021ae7e2b94"}, // 0
+	{"blackice_AR": "03949b06c2773b4573aeb0b52e70ccc2d98dc5794a47e24eeb902c9d28e0e8d28b"},
+	{"alien_EU": "022b85908191788f409506ebcf96a892f3274f352864c3ed566c5a16de63953236"},
+	{"alien_NA": "022f62b56ddfd07c9860921c701285ac39bb3ac8f6f083d1b59c8f4943be3de162"},
+	{"alien_SH": "024f20c096b085308e21893383f44b4faf1cdedea9ad53cc7d7e7fbfa0c30c1e71"},
+	{"alienx_EU": "025de0911bab55616c307f02ea8a5915a2e0c8e479aa97968e7f00d1025cbe6c6d"},
+	{"alienx_NA": "025d5e11725233ab161f4f63d697c5f9f0c6b9d3aa2b9c68299638f8cc63faa9c2"},
+	{"artem.pikulin_AR": "03a45c4ad7f279cbc50acb48d81fc0eb63c4c5f556e3a4393fb3d6414df09c6e4c"},
+	{"artem.pikulin_DEV": "025ee88d1c12f546c1c8942d7a3e0678f10bc27cc566e27bf4a2d2178e018d18c6"},
+	{"blackice_EU": "025f8de3a6181270ceb5c31654e6a6e95d0339bc14b46b5e3050e8a69861c91baa"},
+	{"chmex_AR": "030cd487e10fbf142e0e8d582e702ecb775f378569c3cb5acd0ff97b6b12803588"}, // 10
+	{"chmex_EU": "030bf7bd7ad0515c33b5d5d9a91e0729baf801b9002f80495ae535ea1cebb352cb"},
+	{"chmex_NA": "024e88a36d729352a391e07d1821dbfda1fca6409320cf9c2869b6fb99f05fbddd"},
+	{"chmex_SH": "03e09c8ee6ae20cde64857d116c4bb5d50db6de2887ac39ea3ccf6434b1abf8698"},
+	{"chmex1_SH": "02d59db293de6c7da6673beeb373ebce62fd6d3522f715ea1356b5a2624fbd11a2"},
+	{"cipi_1_EU": "033a812d6cccdc4208378728f3a0e15db5b12074def9ab686ddc3752715ff1a194"},
+	{"cipi_2_EU": "0302ca28a041ed00544de737651bdec9bafe3b7f1c0bf2c6092f2368d59fec75c2"},
+	{"cipi_AR": "02336758998f474659020e6887ece61ac7b8567f9b2d38724ebf77ae800c1fb2b7"},
+	{"cipi_NA": "0335352862da521bd90b99d394db1ee3ecde379db9cf7ba2f28b16fa76153e289f"},
+	{"computergenie_EU": "033a2474a762700b452b96a49730280040a9872070bc51461e3727f6f118ff5358"},
+	{"computergenie_NA": "02f945d87b7cd6e9f2173a110399d36b369edb1f10bdf5a4ba6fd4923e2986e137"}, // 20
+	{"dimxy_AR": "0337e443df52f278f313f90628aaaa7a8db777f17bc7ce519069eb72717c1c2755"},
+	{"dimxy_DEV": "03a7edd6d0ba188960e39eced4d6b4ca6946bd98323ab40cbc13d6e52696de7dc4"},
+	{"dragonhound_NA": "0366a87a476a09e05560c5aae0e44d2ab9ba56e69701cee24307871ddd37c86258"},
+	{"fediakash_AR": "035be6a54242a53e3ca55bd63430ac9b960fbfaad336d8c1464b5802f03ab184be"},
+	{"gcharang_DEV": "03a3878af1152f648e6084fd3fbe697a26b1c2e92d407dd96c375f45f7d3ca13bf"},
+	{"gcharang_SH": "0321868e0eb39271330fa2c3a9f4e542275d9719f8b87773c5432448ab10d6943d"},
+	{"goldenman_AR": "03e027927dd1e379c2f45624ed9b057b187fe094595fee55c53f36ed665ed566ab"},
+	{"kolo_AR": "032c2a6aeaf8176f9630abe2e1bbea5e481da23ab1f9a5b10f220a9b2bc9607bd6"},
+	{"kolo_EU": "03b21717e84c0a6cf22b557b198daba4f78980048211b9139b4517fa08f9f17359"},
+	{"kolox_AR": "038010e24e6d53f26871d31287f446f407fa87596d946bcd1f7b7b8458e34ad73f"}, // 30
+	{"komodopioneers_EU": "02fb31b130babe79ac780a6118702555a8c66875835f35c2232a6cb8b1438fe71d"},
+	{"madmax_DEV": "02d1ace4a25794de5a5287edeb9df9619dc97020114801c5cb287b1efdd49ddbb3"},
+	{"marmarachain_EU": "02ca3e0618bc7c75afa6359ae476ee639682adfaa6fc463bbe7016c4f00da23ccf"},
+	{"mcrypt_AR": "02845d016c68c3e5ce924b164abc271511f3092ae359677a515e8f81a9533472f4"},
+	{"mcrypt_SH": "027a4ca7b11d3456ff558c08bb04483a89c7f383448461fd0b6b3b07424aabe9a4"},
+	{"metaphilibert_SH": "03b21ff042bf1730b28bde43f44c064578b41996117ac7634b567c3773089e3be3"},
+	{"mylo_NA": "02493412e6014d2bb985b1026e31204e7634a211a16454fc696f4dc4dfe409e998"},
+	{"mylo_SH": "026a52dba25ca4deb225a5ef7fca117d59e20ef2319b00e1bb6750a5d61e5ed601"},
+	{"nodeone_NA": "0310a249c6c2dcc29f2135715138a9ddb8e01c0eab701cbd0b96d9cec660dbdc58"},
+	{"nutellalicka_AR": "03a5502c61839a34edc8443aee5c16c67d4a958874e13d9b6b69d29075354739ad"}, // 40
+	{"nutellalicka_SH": "03c7822f0c3434037fa17bfa4d3b7f9d3e0eb9abe49e8cc1188d92c6b3c360a675"},
+	{"ocean_AR": "02d216e72d37a38449d661413cbc6e1f008b21cffdb06865f7be636e2cbc1e5346"},
+	{"pbca26_NA": "030b6515e80aaa489215875e2aa6f2a15fa36cb3342580e885275f8c636252cbc8"},
+	{"pbca26_SH": "02d17840724692a9d5e72d61d001c31eb5ddc4d2f0f104b760e6854bf144e63fb8"},
+	{"phit_SH": "021b893b7978284e3d73701a623f23104fcce27e70fb49427c215f9a7481f652da"},
+	{"ptyx_NA": "025d72ef0f1c5103de306d536360bcf3c5b6129c2046334b21cec8202e9bfc4baf"},
+	{"ptyx2_NA": "02913b3af6f67453eaff2318f3eed0fa0ea60eb2b37c8da64c575fec972f178d9b"},
+	{"sheeba_SH": "030dd2c3c02cbc5b3c25e3c54ed02c1541951a6f5ecf8adbd353e8d9052d08b8fc"},
+	{"smdmitry_AR": "0397b7584cb29717b721c0c587d4462477efc1f36a56921f133c9d17b0cd7f278a"},
+	{"smdmitry_EU": "0338f30ca34d0aca0d79b69abde447036aaaa75f482b6c75801fd382e984337d01"}, // 50
+	{"smdmitry_SH": "03f7d5ac650baaccedab959adf7c4f416584f4c05a37bf079f710227560c456978"},
+	{"strob_SH": "0213751a1c59d3489ca85b3d62a3d606dcef7f0428aa021c1978ea16fb38a2fad6"},
+	{"strobnidan_SH": "033e33ef18effb979437cd202bb87dc32385e16ebd52d6f762d8a3b308d6f89c52"},
+	{"tokel_NA": "0315d866c09e15709e2036a05faec6aaf28e0ecf67329b2adb922b746f22e694bc"},
+	{"tonyl_AR": "02e2d9ecdc9f462a4767f7dfe8ed243c98fcccc1511989a60e3f859dc6fda42d16"},
+	{"tonyl_DEV": "0399c4f8c5b604cda64c1ccb8fdbd7a89730131519f87491a79b0811e619102d8f"},
+	{"van_EU": "0370305b9e91d46331da202ae733d6050d01038ef6eceb2036ada394a48fae84b9"},
+	{"webworker01_EU": "0390ba250f20b5849b9d37ad2bcb58d3d9a3a0385937e652c26511ba9f445f5db1"},
+	{"webworker01_NA": "03bde0df98de0ff9697b7d5ecea225fd7267f55c061caa2c43a47b313e35c9b6c6"},
+	{"who-biz_NA": "0268d30efafc6ac84b1c8210e99fd4936e178794581d348b87f64fcbbfa8d5e73b"}, // 60
+	{"yurii-khi_DEV": "0243977da0533c7c1a37f0f6e30175225c9012d9f3f426180ff6e5710f5a50e32b"},
+	{"ca333_EU": "03c34a62c8c89889e4529962578e0b75a010a6e1d9bcbe8f4bb9cc680d82c7261e"},
+	{"dragonhound_DEV": "02b3c168ed4acd96594288cee3114c77de51b6afe1ab6a866887a13a96ee80f33c"}
+};
+
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp)
 {
     static uint8_t elected_pubkeys0[64][33],
@@ -418,12 +489,14 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
                    elected_pubkeys2[64][33],
                    elected_pubkeys4[64][33],
                    elected_pubkeys5[64][33],
+                   elected_pubkeys6[64][33],
                    did0,
                    did1,
                    did2,
                    did4,
                    did5;
-    static int32_t n0, n1, n2, n4, n5;
+                   did6;
+    static int32_t n0, n1, n2, n4, n5, n6;
     int32_t i, htind, n;
     uint64_t mask = 0;
     struct knotary_entry *kp, *tmp;
@@ -489,7 +562,7 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
             memcpy(pubkeys, elected_pubkeys4, n4 * 33);
             return(n4);
         }
-        else
+        else if ( (timestamp != 0 && timestamp <= KOMODO_NOTARIES_TIMESTAMP6) || height <= KOMODO_NOTARIES_HEIGHT6 )
         {
             if ( did5 == 0 )
             {
@@ -502,6 +575,20 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
             }
             memcpy(pubkeys, elected_pubkeys5, n5 * 33);
             return(n5);
+        }
+        else
+        {
+            if ( did6 == 0 )
+            {
+                n6 = (int32_t)(sizeof(Notaries_elected6)/sizeof(*Notaries_elected6));
+                for (i=0; i<n6; i++)
+                    decode_hex(elected_pubkeys6[i],33,(char *)Notaries_elected6[i][1]);
+                if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
+                    fprintf(stderr,"%s height.%d t.%u elected.%d notaries6\n",ASSETCHAINS_SYMBOL,height,timestamp,n6);
+                did6 = 1;
+            }
+            memcpy(pubkeys, elected_pubkeys6, n6 * 33);
+            return(n6);
         }
     }
     htind = height / KOMODO_ELECTION_GAP;

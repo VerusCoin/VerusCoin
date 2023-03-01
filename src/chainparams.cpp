@@ -296,7 +296,7 @@ void *chainparams_commandline(void *ptr)
         // only require coinbase protection on Verus from the Komodo family of coins
         if (_IsVerusMainnetActive())
         {
-            mainParams.vSeeds.push_back(CDNSSeedData("veruscoin.io", "seeds.veruscoin.io"));
+            mainParams.vSeeds.push_back(CDNSSeedData("verus.io", "seeds.verus.io"));
             mainParams.vSeeds.push_back(CDNSSeedData("komodoplatform.com", "seeds.komodoplatform.com")); // @kolo - old static dns seeds
 
             mainParams.consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 227520;
@@ -327,7 +327,7 @@ void *chainparams_commandline(void *ptr)
                 mainParams.vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
                 if (_IsVerusMainnetActive())
                 {
-                    mainParams.vSeeds.push_back(CDNSSeedData("veruscoin.io", "seeds.veruscoin.io"));
+                    mainParams.vSeeds.push_back(CDNSSeedData("verus.io", "seeds.verus.io"));
                 }
             }
             mainParams.consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000000020");

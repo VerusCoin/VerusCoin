@@ -529,6 +529,34 @@ int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height)
     } else return(1);
 }
 
+namespace {
+    bool CheckChainNameInScript(uint8_t* scriptbuf, int32_t scriptlen, size_t offsetInScript)
+    {
+        std::string chainPattern = ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : std::string(ASSETCHAINS_SYMBOL);
+        size_t chainPatternSize = chainPattern.size();
+
+        if (offsetInScript + chainPatternSize < scriptlen) {
+            if (std::equal(chainPattern.begin(), chainPattern.end(), &scriptbuf[offsetInScript]) && scriptbuf[offsetInScript + chainPatternSize] == '\0') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::string GetChainNameFromScript(uint8_t* scriptbuf, int32_t scriptlen, size_t offsetInScript)
+    {
+        std::string chainPattern = "";
+        const size_t maxChainName = sizeof(komodo_ccdata::symbol);
+
+        while (offsetInScript < scriptlen && scriptbuf[offsetInScript] != '\0' && chainPattern.size() < maxChainName) {
+            chainPattern.push_back(scriptbuf[offsetInScript]);
+            ++offsetInScript;
+        }
+
+        return chainPattern;
+    }
+}
+
 int32_t komodo_voutupdate(int32_t *isratificationp,int32_t notaryid,uint8_t *scriptbuf,int32_t scriptlen,int32_t height,uint256 txhash,int32_t i,int32_t j,uint64_t *voutmaskp,int32_t *specialtxp,int32_t *notarizedheightp,uint64_t value,int32_t notarized,uint64_t signedmask,uint32_t timestamp)
 {
     static uint256 zero; static FILE *signedfp;
@@ -621,31 +649,31 @@ int32_t komodo_voutupdate(int32_t *isratificationp,int32_t notaryid,uint8_t *scr
             return notaryid;  // such as a 33-byte staking opret or a 32-byte notary proof in a mined block.
 
         opoffset = len;
+
         matched = 0;
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        {
-            if ( strcmp("KMD",(char *)&scriptbuf[len+32 * 2 + 4]) == 0 )
-                matched = 1;
+
+        if (CheckChainNameInScript(scriptbuf, scriptlen, len + 32 * 2 + 4)) {
+            matched = 1;
         }
-        else
-        {
-            if ( strcmp(ASSETCHAINS_SYMBOL,(char *)&scriptbuf[len+32*2+4]) == 0 )
-                matched = 1;
-        }
+
         offset = 32 * (1 + matched) + 4;
-        nameoffset = (int32_t)strlen((char *)&scriptbuf[len+offset]);
+
+        std::string fromScriptChainName = GetChainNameFromScript(scriptbuf, scriptlen, len + offset);
+        if (fromScriptChainName.empty())
+            return notaryid;
+
+        nameoffset = fromScriptChainName.size();
         nameoffset++;
         memset(&ccdata,0,sizeof(ccdata));
-        strncpy(ccdata.symbol,(char *)&scriptbuf[len+offset],sizeof(ccdata.symbol));
+        std::copy_n(fromScriptChainName.begin(), std::min(fromScriptChainName.size(), sizeof(ccdata.symbol)), ccdata.symbol);
+
         if ( j == 1 && opretlen >= len+offset-opoffset )
         {
             memset(&MoMoMdata,0,sizeof(MoMoMdata));
-            if ( matched == 0 && bitweight(signedmask) >= KOMODO_MINRATIFY )
+            if ( matched == 0 && signedmask != 0 && bitweight(signedmask) >= KOMODO_MINRATIFY )
                 notarized = 1;
-            if ( strcmp("PIZZA",ccdata.symbol) == 0 || strncmp("TXSCL",ccdata.symbol,5) == 0 )
+            if (fromScriptChainName == "PIZZA" || fromScriptChainName == "BEER")
                 notarized = 1;
-            if ( 0 && opretlen != 149 )
-                printf("[%s].%d (%s) matched.%d i.%d j.%d notarized.%d %llx opretlen.%d len.%d offset.%d opoffset.%d\n",ASSETCHAINS_SYMBOL,height,ccdata.symbol,matched,i,j,notarized,(long long)signedmask,opretlen,len,offset,opoffset);
             len += iguana_rwbignum(0,&scriptbuf[len],32,(uint8_t *)&srchash);
             len += iguana_rwnum(0,&scriptbuf[len],sizeof(*notarizedheightp),(uint8_t *)notarizedheightp);
             if ( matched != 0 )
@@ -767,10 +795,7 @@ int32_t komodo_voutupdate(int32_t *isratificationp,int32_t notaryid,uint8_t *scr
         }
         else if ( matched != 0 )
         {
-            //int32_t k; for (k=0; k<scriptlen; k++)
-            //    printf("%02x",scriptbuf[k]);
-            //printf(" <- script ht.%d i.%d j.%d value %.8f %s\n",height,i,j,dstr(value),ASSETCHAINS_SYMBOL);
-            if ( opretlen >= 32*2+4 && strcmp(ASSETCHAINS_SYMBOL[0]==0?"KMD":ASSETCHAINS_SYMBOL,(char *)&scriptbuf[len+32*2+4]) == 0 )
+            if ( opretlen >= 32*2+4 && CheckChainNameInScript(scriptbuf, scriptlen, len + 32 * 2 + 4) )
             {
                 for (k=0; k<32; k++)
                     if ( scriptbuf[len+k] != 0 )

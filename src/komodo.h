@@ -581,13 +581,45 @@ int32_t komodo_voutupdate(int32_t *isratificationp,int32_t notaryid,uint8_t *scr
     {
         struct komodo_ccdata ccdata; struct komodo_ccdataMoMoM MoMoMdata;
         int32_t validated = 0,nameoffset,opoffset = 0;
-        if ( (opretlen= scriptbuf[len++]) == 0x4c )
-            opretlen = scriptbuf[len++];
-        else if ( opretlen == 0x4d )
-        {
-            opretlen = scriptbuf[len++];
-            opretlen += (scriptbuf[len++] << 8);
+
+        if (scriptlen - len < 1)
+            return notaryid;
+
+        uint8_t opcode = scriptbuf[len++];
+
+        if (opcode <= OP_PUSHDATA4) {
+            opretlen = 0;
+            if (opcode < OP_PUSHDATA1) {
+                opretlen = opcode;
+            } else if (opcode == OP_PUSHDATA1) {
+                if (scriptlen - len < 1)
+                    return notaryid;
+                opretlen = scriptbuf[len++];
+            } else if (opcode == OP_PUSHDATA2) {
+                if (scriptlen - len < 2)
+                    return notaryid;
+                uint16_t x;
+                memcpy((char*)&x, &scriptbuf[len], 2);
+                opretlen = le16toh(x);
+                len += 2;
+            } else if (opcode == OP_PUSHDATA4) {
+                if (scriptlen - len < 4)
+                    return notaryid;
+                uint32_t x;
+                memcpy((char*)&x, &scriptbuf[len], 4);
+                opretlen = le32toh(x);
+                len += 4;
+            }
+        } else {
+            return notaryid;
         }
+
+        if (scriptlen - len < 0 || (unsigned int)(scriptlen - len) < opretlen)
+            return notaryid;
+
+        if (opretlen < 34)    // Stop processing of OP_RETURNs that do not contain significant data,
+            return notaryid;  // such as a 33-byte staking opret or a 32-byte notary proof in a mined block.
+
         opoffset = len;
         matched = 0;
         if ( ASSETCHAINS_SYMBOL[0] == 0 )

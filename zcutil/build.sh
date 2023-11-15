@@ -110,6 +110,6 @@ if [ "$(gcc --version|head -1 | awk '{print $4}' | cut -d"." -f1)" -lt 8 ]; then
 	CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CPPFLAGS='-g' CXXFLAGS='-g'
 else
 	# version 8 and up
-	CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CPPFLAGS='-g -Wno-builtin-declaration-mismatch -Werror' CXXFLAGS='-g'
+	CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CPPFLAGS='-g -Wno-builtin-declaration-mismatch -Wnonnull -Werror' CXXFLAGS='-g'
 fi
 "$MAKE" "$@" V=1

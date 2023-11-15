@@ -1739,6 +1739,8 @@ void komodo_args(char *argv0)
     uint16_t port;
     int32_t baseid,len,n,extralen = 0;
 
+    memset(extrabuf, 0, sizeof(extrabuf));
+
     IS_KOMODO_NOTARY = GetBoolArg("-notary", false);
 
     if ( GetBoolArg("-gen", false) != 0 )
@@ -2080,6 +2082,7 @@ void komodo_args(char *argv0)
 
         MAX_BLOCK_SIGOPS = 60000;
         ASSETCHAINS_COMMISSION = GetArg("-ac_perc",0);
+        memset(ASSETCHAINS_OVERRIDE_PUBKEY33, 0, sizeof(ASSETCHAINS_OVERRIDE_PUBKEY33));
         ASSETCHAINS_OVERRIDE_PUBKEY = GetArg("-ac_pubkey","");
         ASSETCHAINS_SAPLING = 1;
         ASSETCHAINS_OVERWINTER = 1;

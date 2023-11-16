@@ -3,7 +3,7 @@ $(package)_version=1_74_0
 $(package)_download_path=https://boostorg.jfrog.io/artifactory/main/release/$(subst _,.,$($(package)_version))/source/
 $(package)_file_name=boost_$($(package)_version).tar.bz2
 $(package)_sha256_hash=83bfc1507731a0906e387fc28b7ef5417d591429e51e788417fe9ff025e116b1
-$(package)_patches=signals2-noise.patch
+$(package)_patches=signals2-noise.patch ignore_wnonnull_gcc_11.patch
 
 
 define $(package)_set_vars
@@ -29,6 +29,7 @@ endef
 
 define $(package)_preprocess_cmds
   patch -p2 < $($(package)_patch_dir)/signals2-noise.patch && \
+  patch -p2 < $($(package)_patch_dir)/ignore_wnonnull_gcc_11.patch && \
   echo "using $(boost_toolset_$(host_os)) : : $($(package)_cxx) : <cxxflags>\"$($(package)_cxxflags) $($(package)_cppflags)\" <linkflags>\"$($(package)_ldflags)\" <archiver>\"$(boost_archiver_$(host_os))\" <striper>\"$(host_STRIP)\"  <ranlib>\"$(host_RANLIB)\" <rc>\"$(host_WINDRES)\" : ;" > user-config.jam
 endef
 

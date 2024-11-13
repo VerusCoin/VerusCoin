@@ -2,6 +2,7 @@
 
 SOURCES_PATH ?= $(BASEDIR)/sources
 BASE_CACHE ?= $(BASEDIR)/built
+WORK_PATH = $(BASEDIR)/work
 SDK_PATH ?= $(BASEDIR)/SDKs
 NO_WALLET ?=
 NO_UPNP ?=
@@ -59,8 +60,10 @@ endif
 $(host_arch)_$(host_os)_prefix=$(BASEDIR)/$(host)
 $(host_arch)_$(host_os)_host=$(host)
 host_prefix=$($(host_arch)_$(host_os)_prefix)
+$(info host_prefix is set to: $(host_prefix))
 build_prefix=$(host_prefix)/native
 build_host=$(build)
+$(info build_host is set to: $(build_host))
 
 AT_$(V):=
 AT_:=@
@@ -150,7 +153,6 @@ clean:
 
 install: check-packages $(host_prefix)/share/config.site
 
-
 download-one: check-sources $(all_sources)
 
 download-osx:
@@ -161,4 +163,4 @@ download-win:
 	@$(MAKE) -s HOST=x86_64-w64-mingw32 download-one
 download: download-osx download-linux download-win
 
-.PHONY: install cached download-one download-osx download-linux download-win download check-packages check-sources
+.PHONY: install cached clean clean-all download-one download-osx download-linux download-win download check-packages check-sources

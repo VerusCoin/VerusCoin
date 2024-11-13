@@ -1,0 +1,32 @@
+From jzmaddock Mon Sep 17 00:00:00 2001
+From: jzmaddock
+Date: May 9, 2022
+Subject: [PATCH] Fix warning about deprecated
+ std::unary_function
+
+---
+ include/boost/container_hash/hash.hpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/boost/container_hash/hash.hpp b/include/boost/container_hash/hash.hpp
+index 7aac2fa..3f4079f 100644
+--- a/include/boost/container_hash/hash.hpp
++++ b/include/boost/container_hash/hash.hpp
+@@ -119,17 +119,12 @@ namespace boost
+ {
+     namespace hash_detail
+     {
+-#if defined(BOOST_NO_CXX98_FUNCTION_BASE)
+         template <typename T>
+         struct hash_base
+         {
+             typedef T argument_type;
+             typedef std::size_t result_type;
+         };
+-#else
+-        template <typename T>
+-        struct hash_base : std::unary_function<T, std::size_t> {};
+-#endif
+ 
+         struct enable_hash_value { typedef std::size_t type; };
+ 

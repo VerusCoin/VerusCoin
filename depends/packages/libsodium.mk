@@ -15,7 +15,7 @@ endef
 endif
 
 define $(package)_preprocess_cmds
-  cd $($(package)_build_subdir); ./autogen.sh
+  cd $($(package)_build_subdir); DO_NOT_UPDATE_CONFIG_SCRIPTS=1 ./autogen.sh
 endef
 
 define $(package)_config_cmds

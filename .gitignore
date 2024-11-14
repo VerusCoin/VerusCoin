@@ -35,6 +35,8 @@ src/config/bitcoin-config.h
 src/config/bitcoin-config.h.in
 src/config/stamp-h1
 share/setup.nsi
+src/univalue/configure~
+configure~
 
 cache/
 venv-mnf/
@@ -132,4 +134,3 @@ src/cryptoconditions/src/cryptoconditions-config.h*
 src/cryptoconditions/compile
 #output during builds, symbol tables?
 *.dSYM
-

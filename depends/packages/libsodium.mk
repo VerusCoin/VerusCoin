@@ -4,7 +4,7 @@ $(package)_download_path=https://download.libsodium.org/libsodium/releases/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=6f504490b342a4f8a4c4a02fc9b866cbef8622d5df4e5452b46be121e46636c1
 $(package)_dependencies=
-$(package)_config_opts=
+$(package)_config_opts=DO_NOT_UPDATE_CONFIG_SCRIPTS=1
 
 ifeq ($(build_os),darwin)
 define $(package)_set_vars

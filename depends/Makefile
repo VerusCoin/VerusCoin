@@ -2,6 +2,7 @@
 
 SOURCES_PATH ?= $(BASEDIR)/sources
 BASE_CACHE ?= $(BASEDIR)/built
+WORK_PATH = $(BASEDIR)/work
 SDK_PATH ?= $(BASEDIR)/SDKs
 NO_WALLET ?=
 NO_UPNP ?=
@@ -55,12 +56,14 @@ host_os:=$(strip $(host_os))
 ifeq ($(host_os),)
 host_os=$(full_host_os)
 endif
-
+$(info ********* host_os is set to: $(host_os) *********)
 $(host_arch)_$(host_os)_prefix=$(BASEDIR)/$(host)
 $(host_arch)_$(host_os)_host=$(host)
 host_prefix=$($(host_arch)_$(host_os)_prefix)
+$(info host_prefix is set to: $(host_prefix))
 build_prefix=$(host_prefix)/native
 build_host=$(build)
+
 
 AT_$(V):=
 AT_:=@
@@ -78,6 +81,7 @@ wallet_packages_$(NO_WALLET) = $(wallet_packages)
 proton_packages_$(NO_PROTON) = $(proton_packages)
 
 packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(rust_packages) $(proton_packages_) $(wallet_packages_)
+$(info ********* build_host is set to: $(build_host) *********)
 native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages)
 all_packages = $(packages) $(native_packages)
 
@@ -142,8 +146,13 @@ $(host_prefix)/share/config.site: check-packages
 
 check-packages: check-sources
 
-install: check-packages $(host_prefix)/share/config.site
+clean-all: clean
+	@rm -rf $(SOURCES_PATH) x86_64* i686* mips* arm* aarch64*
 
+clean:
+	@rm -rf $(WORK_PATH) $(BASE_CACHE) $(BUILD)
+
+install: check-packages $(host_prefix)/share/config.site
 
 download-one: check-sources $(all_sources)
 
@@ -155,4 +164,4 @@ download-win:
 	@$(MAKE) -s HOST=x86_64-w64-mingw32 download-one
 download: download-osx download-linux download-win
 
-.PHONY: install cached download-one download-osx download-linux download-win download check-packages check-sources
+.PHONY: install cached clean clean-all download-one download-osx download-linux download-win download check-packages check-sources

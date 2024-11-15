@@ -56,14 +56,14 @@ host_os:=$(strip $(host_os))
 ifeq ($(host_os),)
 host_os=$(full_host_os)
 endif
-
+$(info ********* host_os is set to: $(host_os) *********)
 $(host_arch)_$(host_os)_prefix=$(BASEDIR)/$(host)
 $(host_arch)_$(host_os)_host=$(host)
 host_prefix=$($(host_arch)_$(host_os)_prefix)
 $(info host_prefix is set to: $(host_prefix))
 build_prefix=$(host_prefix)/native
 build_host=$(build)
-$(info build_host is set to: $(build_host))
+
 
 AT_$(V):=
 AT_:=@
@@ -81,6 +81,7 @@ wallet_packages_$(NO_WALLET) = $(wallet_packages)
 proton_packages_$(NO_PROTON) = $(proton_packages)
 
 packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(rust_packages) $(proton_packages_) $(wallet_packages_)
+$(info ********* build_host is set to: $(build_host) *********)
 native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages)
 all_packages = $(packages) $(native_packages)
 

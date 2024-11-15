@@ -105,7 +105,15 @@ HOST="$HOST" BUILD="$BUILD" NO_PROTON="$PROTON_ARG" "$MAKE" "$@" -C ./depends/ V
 ./autogen.sh
 
 # 0x03 2020-01-03, do not use '-Wno-builtin-declaration-mismatch or -Werror on GCC <v8
-if [ "$(gcc --version|head -1 | awk '{print $4}' | cut -d"." -f1)" -lt 8 ]; then
+GCC_VERSION=$(gcc --version | head -1 | awk '{print $3}' | cut -d"." -f1)
+# If GCC_VERSION is not a number, try the alternative field
+if ! [[ "$GCC_VERSION" =~ ^[0-9]+$ ]]; then
+  GCC_VERSION=$(gcc --version | head -1 | awk '{print $4}' | cut -d"." -f1)
+fi
+
+echo "Info: GCC Version: $GCC_VERSION"
+
+if [ "$GCC_VERSION" -lt 8 ]; then
 	# version <8
 	CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CPPFLAGS='-g' CXXFLAGS='-g'
 else

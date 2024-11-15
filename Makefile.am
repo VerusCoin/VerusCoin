@@ -5,6 +5,10 @@
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 ACLOCAL_AMFLAGS = -I build-aux/m4
+# print the triplets
+$(info *********** BUILD_TRIPLET is set to: $(build_triplet) ***********)
+$(info *********** HOST_TRIPLET is set to: $(host_triplet) ***********)
+
 SUBDIRS = src
 if ENABLE_MAN
 SUBDIRS += doc/man
@@ -51,6 +55,16 @@ COVERAGE_INFO = baseline_filtered_combined.info baseline.info block_test.info \
   #zcash-gtest.info zcash-gtest_filtered.info zcash-gtest_coverage.info
 endif
 
+LCOV_EXCLUDE_PATTERNS = "/usr/include/*" \
+	"$(abs_builddir)/depends/$(host_triplet)/include/*.h" \
+	"$(abs_builddir)/depends/$(host_triplet)/include/boost/*" \
+	"$(abs_builddir)/depends/$(host_triplet)/include/gmock/*" \
+	"$(abs_builddir)/depends/$(host_triplet)/include/gtest/*" \
+	"$(abs_builddir)/src/gtest/*" \
+	"$(abs_builddir)/src/test/*" \
+	"$(abs_builddir)/src/wallet/gtest/*" \
+	"$(abs_builddir)/src/wallet/test/*"
+
 dist-hook:
 	-$(MAKE) -C $(top_distdir)/src/leveldb clean
 	-$(MAKE) -C $(top_distdir)/src/secp256k1 distclean
@@ -88,28 +102,10 @@ baseline.info:
 
 if BUILD_DARWIN
 baseline_filtered.info: baseline.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/*.h" \
-	"$(abs_builddir)/depends/$(BUILD)/include/boost/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gmock/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 else
 baseline_filtered.info: baseline.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/*.h" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/boost/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gmock/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 endif
 
 leveldb_baseline.info: baseline_filtered.info
@@ -117,28 +113,10 @@ leveldb_baseline.info: baseline_filtered.info
 
 if BUILD_DARWIN
 leveldb_baseline_filtered.info: leveldb_baseline.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/*.h" \
-	"$(abs_builddir)/depends/$(BUILD)/include/boost/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gmock/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 else
 leveldb_baseline_filtered.info: leveldb_baseline.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/*.h" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/boost/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gmock/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 endif
 
 baseline_filtered_combined.info: leveldb_baseline_filtered.info baseline_filtered.info
@@ -152,28 +130,10 @@ test_bitcoin.info: baseline_filtered_combined.info
 
 if BUILD_DARWIN
 test_bitcoin_filtered.info: test_bitcoin.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/*.h" \
-	"$(abs_builddir)/depends/$(BUILD)/include/boost/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gmock/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 else
 test_bitcoin_filtered.info: test_bitcoin.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/*.h" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/boost/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gmock/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 endif
 
 
@@ -186,28 +146,10 @@ block_test.info: test_bitcoin_filtered.info
 
 if BUILD_DARWIN
 block_test_filtered.info: block_test.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/*.h" \
-	"$(abs_builddir)/depends/$(BUILD)/include/boost/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gmock/*" \
-	"$(abs_builddir)/depends/$(BUILD)/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 else
 block_test_filtered.info: block_test.info
-	$(LCOV) -r $< "/usr/include/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/*.h" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/boost/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gmock/*" \
-	"$(abs_builddir)/depends/x86_64-unknown-linux-gnu/include/gtest/*" \
-	"$(abs_builddir)/src/gtest/*" \
-	"$(abs_builddir)/src/test/*" \
-	"$(abs_builddir)/src/wallet/gtest/*" \
-	"$(abs_builddir)/src/wallet/test/*" \
-	-o $@
+	$(LCOV) -r $< $(LCOV_EXCLUDE_PATTERNS) -o $@
 endif
 
 

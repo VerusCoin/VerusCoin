@@ -12079,7 +12079,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                                 }
                                 else
                                 {
-                                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Must provide refund address, have valid \"-defaultid\" set, or have a non-wildcard transparent source when sending via a converter cross chain");
+                                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Must provide \"refundto\" address, have valid \"-defaultid\" set, or have a non-wildcard transparent source when sending via a converter cross chain");
                                 }
                                 dest.SetAuxDest(DestinationToTransferDestination(refundDestination), 0);
                             }

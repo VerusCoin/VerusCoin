@@ -870,7 +870,7 @@ UniValue z_getencryptionaddress(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1 || !params[0].isObject())
         throw runtime_error(
-            "z_generateencryptionkey '{(\"address\":\"zaddress present in wallet\" | \"seed\":\"wallet seed for address\", \"hdindex\":n - address to derive from seed | \"rootkey\":\"extended private key\"),\n"
+            "z_getencryptionaddress '{(\"address\":\"zaddress present in wallet\" | \"seed\":\"wallet seed for address\", \"hdindex\":n - address to derive from seed | \"rootkey\":\"extended private key\"),\n"
             "                          \"fromid\":\"id@ or i-address\",\n"
             "                          \"toid\":\"id@ or i-address\",\n"
             "                          \"returnsecret\": true | false}'\n"
@@ -893,13 +893,13 @@ UniValue z_getencryptionaddress(const UniValue& params, bool fHelp)
             "}\n"
             "\nExamples:\n"
             "\nExample1 description\n"
-            + HelpExampleCli("z_generateencryptionkey", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
+            + HelpExampleCli("z_getencryptionaddress", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
             "\nExample2 description\n"
-            + HelpExampleCli("z_generateencryptionkey", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
+            + HelpExampleCli("z_getencryptionaddress", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
             "\nExample3 description\n"
-            + HelpExampleCli("z_generateencryptionkey", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
+            + HelpExampleCli("z_getencryptionaddress", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}") +
             "\nExample4 description\n"
-            + HelpExampleRpc("z_generateencryptionkey", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}")
+            + HelpExampleRpc("z_getencryptionaddress", "'{\"address\":\"localzaddress\",\"fromid\":\"bob@\",\"toid\":\"alice@\"}")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);

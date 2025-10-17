@@ -2992,7 +2992,7 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                                 (oneCurDef = CCurrencyDefinition(tempP.vData[0])).IsValid())
                             {
                                 //printf("%s: Adding currency:\n%s\n", __func__, oneCurDef.ToUniValue().write(1,2).c_str());
-                                ConnectedChains.currencyDefCache.Put(oneCurDef.GetID(), oneCurDef);
+                                ConnectedChains.UpdateCachedCurrency(oneCurDef, nHeight);
                             }
                         }
                         loadedCurrencies = true;

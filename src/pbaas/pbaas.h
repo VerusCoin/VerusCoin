@@ -692,7 +692,8 @@ public:
                                            const CPBaaSNotarization &notarization,
                                            const CNotaryEvidence &notaryEvidence,
                                            CValidationState &state,
-                                           TransactionBuilder &txBuilder);
+                                           TransactionBuilder &txBuilder,
+                                           const CTxDestination &fromDest);
 
     static bool ConfirmOrRejectNotarizations(CWallet *pWallet,
                                              const CRPCChainData &externalSystem,
@@ -969,7 +970,7 @@ public:
 
     std::map<uint160, CUpgradeDescriptor> activeUpgradesByKey;
 
-    LRUCache<uint160, CCurrencyDefinition> currencyDefCache;        // protected by cs_main, so doesn't need sync
+    LRUCache<uint160, std::tuple<uint32_t, uint256, CCurrencyDefinition>> currencyDefCache;  // protected by cs_main, so doesn't need sync
     LRUCache<std::tuple<uint160, uint256, bool>, CCoinbaseCurrencyState> currencyStateCache; // cached currency states @ heights + updated flag
 
     // make earned notarizations for one or more notary chains

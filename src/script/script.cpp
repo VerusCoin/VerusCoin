@@ -961,6 +961,7 @@ bool CScript::IsCheckLockTimeVerify(int64_t *unlockTime) const
     if (this->GetOp2(it, op, &unlockTimeParam))
     {
         if (unlockTimeParam.size() >= 0 && unlockTimeParam.size() < 6 &&
+            this->size() > (unlockTimeParam.size() + 1) &&
             (*this)[unlockTimeParam.size() + 1] == OP_CHECKLOCKTIMEVERIFY)
         {
             int i = unlockTimeParam.size() - 1;

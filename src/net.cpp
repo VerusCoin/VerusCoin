@@ -2217,6 +2217,10 @@ instance_of_cnetcleanup;
 
 void RelayTransaction(const CTransaction& tx)
 {
+    if (LogAcceptCategory("relaytransactions"))
+    {
+        LogPrintf("relaying transaction: %s\n", tx.GetHash().GetHex().c_str());
+    }
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss.reserve(10000);
     ss << tx;

@@ -2001,9 +2001,10 @@ UniValue signdata(const UniValue& params, bool fHelp)
 
             // if we should create an advanced signature from an object specification do it, otherwise,
             // drop through
+            CIdentitySignature identitySig;
             if (objectSignature)
             {
-                CIdentitySignature identitySig = CIdentitySignature(nHeight, std::set<std::vector<unsigned char>>(), (CCurrencyDefinition::EHashTypes)hashType, CIdentitySignature::VERSION_ETHBRIDGE);
+                identitySig = CIdentitySignature(nHeight, std::set<std::vector<unsigned char>>(), (CCurrencyDefinition::EHashTypes)hashType, CIdentitySignature::VERSION_ETHBRIDGE);
                 if (!strSignature.empty())
                 {
                     std::vector<unsigned char> sigVec;
@@ -2149,6 +2150,7 @@ UniValue signdata(const UniValue& params, bool fHelp)
                     ret.push_back(Pair("boundhashes", boundHashes));
                 }
             }
+            ret.pushKV("signatureversion", identitySig.version);
             ret.push_back(Pair("signature", sig));
             return ret;
         }

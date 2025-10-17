@@ -8391,6 +8391,7 @@ void static ProcessGetData(CNode* pfrom, const Consensus::Params& consensusParam
                                 }
                             }
                             if (send) {
+                                LogPrint("relaytransactions", "Relaying a merkleblock message with %u transactions\n", (uint32_t)block.vtx.size());
                                 pfrom->PushMessage("merkleblock", merkleBlock);
                                 // CMerkleBlock just contains hashes, so also push any transactions in the block the client did not see
                                 // This avoids hurting performance by pointlessly requiring a round-trip
@@ -8982,7 +8983,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 if (fBlocksOnly)
                     LogPrint("net", "transaction (%s) inv sent in violation of protocol peer=%d\n", inv.hash.ToString(), pfrom->id);
                 else if (!fAlreadyHave && !IsInitialBlockDownload(Params()))
+                {
                     pfrom->AskFor(inv);
+                    LogPrint("relaytransactions", "inv tx: %s\n", inv.hash.ToString());
+                }
             }
 
             if (pfrom->nSendSize > (SendBufferSize() * 2)) {

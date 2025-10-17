@@ -4707,7 +4707,8 @@ bool CPBaaSNotarization::CreateAcceptedNotarization(const CCurrencyDefinition &e
                                                     const CPBaaSNotarization &earnedNotarization,
                                                     const CNotaryEvidence &notaryEvidence,
                                                     CValidationState &state,
-                                                    TransactionBuilder &txBuilder)
+                                                    TransactionBuilder &txBuilder,
+                                                    const CTxDestination &fromDest)
 {
     std::string errorPrefix(strprintf("%s: ", __func__));
     uint160 SystemID = externalSystem.GetID();
@@ -4768,22 +4769,7 @@ bool CPBaaSNotarization::CreateAcceptedNotarization(const CCurrencyDefinition &e
     }
 
     // now, we'll want to put our own proposer as the beneficiary of this notarization, if possible
-    if (!VERUS_NOTARYID.IsNull())
-    {
-        newNotarization.proposer.SetAuxDest(DestinationToTransferDestination(VERUS_NOTARYID), 0);
-    }
-    else if (!GetArg("-mineraddress", "").empty())
-    {
-        newNotarization.proposer.SetAuxDest(DestinationToTransferDestination(DecodeDestination(GetArg("-mineraddress", ""))), 0);
-    }
-    else if (!NOTARY_PUBKEY.empty())
-    {
-        newNotarization.proposer.SetAuxDest(DestinationToTransferDestination(CPubKey(ParseHex(NOTARY_PUBKEY))), 0);
-    }
-    else if (!VERUS_DEFAULTID.IsNull())
-    {
-        newNotarization.proposer.SetAuxDest(DestinationToTransferDestination(VERUS_DEFAULTID), 0);
-    }
+    newNotarization.proposer.SetAuxDest(DestinationToTransferDestination(fromDest), 0);
 
     CProofRoot ourRoot = newNotarization.proofRoots[ASSETCHAINS_CHAINID];
 
@@ -9878,6 +9864,10 @@ std::vector<uint256> CPBaaSNotarization::SubmitFinalizedNotarizations(const CRPC
     std::string strTxId;
     params.push_back(lastConfirmedNotarization.ToUniValue());
     params.push_back(allEvidence.ToUniValue());
+    if (!VERUS_NOTARYID.IsNull())
+    {
+        params.push_back(EncodeDestination(VERUS_NOTARYID));
+    }
 
     LogPrint("notarization", "submitting notarization with parameters:\n%s\n%s\n", params[0].write(1,2).c_str(), params[1].write(1,2).c_str());
 

@@ -811,7 +811,14 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                             uint256 blockHash;
                             if (!myGetTransaction(cci.exportTxId, exportTx, blockHash))
                             {
-                                return state.Error("Can't get export for import: " + cci.ToUniValue().write(1,2));
+                                if (LogAcceptCategory("crosschainimports"))
+                                {
+                                    return state.Error("Can't get export for import: " + cci.ToUniValue().write(1,2));
+                                }
+                                else
+                                {
+                                    return state.Error("Can't get export for import. Missing export: " + cci.exportTxId.GetHex());
+                                }
                             }
 
                             haveExportTx = true;
@@ -1619,14 +1626,19 @@ bool PrecheckCrossChainExport(const CTransaction &tx, int32_t outNum, CValidatio
              reserveTransfers.size() != txInputVec.size() ||
              ccx.IsClearLaunch() != isClearLaunchExport))
         {
-            if (LogAcceptCategory("crosschainexports"))
+            if (LogAcceptCategory("crosschainexports") || LogAcceptCategory("mevattack"))
             {
                 printf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld\n",
                        __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size());
                 LogPrintf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld\n",
                        __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size());
+                printf("height: %u, currencyname: %s, ccx: %s\n", height, thisDef.name.c_str(), ccx.ToUniValue().write(1,2).c_str());
+                LogPrintf("height: %u, currencyname: %s, ccx: %s\n", height, thisDef.name.c_str(), ccx.ToUniValue().write(1,2).c_str());
+                printf("firsinput: %s\n", CUTXORef(tx.vin[0].prevout).ToUniValue().write().c_str());
+                LogPrintf("firsinput: %s\n", CUTXORef(tx.vin[0].prevout).ToUniValue().write().c_str());
             }
-            return state.Error("Export is not exporting cross chain transfers correctly as required by protocol");
+            return state.Error("Export is not exporting cross chain transfers correctly as required by protocol, currencyid: " + 
+                                EncodeDestination(CIdentityID(ccx.destCurrencyID)) + " hash: " + tx.GetHash().GetHex());
         }
 
         std::set<std::pair<uint256, int>> utxos;
@@ -7255,13 +7267,25 @@ bool CConnectedChains::SetLatestMiningOutputs(const std::vector<CTxOut> &minerOu
 
 CCurrencyDefinition CConnectedChains::GetCachedCurrency(const uint160 &currencyID)
 {
-    CCurrencyDefinition currencyDef = currencyDefCache.Get(currencyID);
-    int32_t defHeight;
-    if (!currencyDef.IsValid() && !GetCurrencyDefinition(currencyID, currencyDef, &defHeight, true))
+    std::tuple<uint32_t, uint256, CCurrencyDefinition> specificCurDef = currencyDefCache.Get(currencyID);
+    CCurrencyDefinition currencyDef = std::get<2>(specificCurDef);
+    if (!currencyDef.IsValid() ||
+        (!std::get<0>(specificCurDef) && currencyDef.GetID() != ASSETCHAINS_CHAINID) ||
+        (std::get<0>(specificCurDef) > 0 &&
+         std::get<0>(specificCurDef) <= chainActive.Height() &&
+         chainActive[std::get<0>(specificCurDef)]->GetBlockHash() != std::get<1>(specificCurDef)) ||
+        ((chainActive.Height() + 1) == std::get<0>(specificCurDef) &&
+          std::get<1>(specificCurDef) != uint256()) ||
+        (chainActive.Height() + 1) < std::get<0>(specificCurDef))
     {
-        return currencyDef;
+        int32_t defHeight;
+        if (!GetCurrencyDefinition(currencyID, currencyDef, &defHeight, true))
+        {
+            return CCurrencyDefinition();
+        }
+        uint256 blockHash = defHeight == 0 || defHeight > chainActive.Height() ? uint256() : chainActive[defHeight]->GetBlockHash();
+        currencyDefCache.Put(currencyID, {defHeight, blockHash, currencyDef});
     }
-    currencyDefCache.Put(currencyID, currencyDef);
     return currencyDef;
 }
 
@@ -7272,7 +7296,14 @@ CCurrencyDefinition CConnectedChains::UpdateCachedCurrency(const CCurrencyDefini
     // or script validation, where it is held either by this thread or one waiting for it.
     // in the long run, the daemon synchonrization model should be improved
     uint160 currencyID = currencyDef.GetID();
-    currencyDefCache.Put(currencyID, currencyDef);
+    if (!height || chainActive.Height() < height)
+    {
+        currencyDefCache.Put(currencyID, {height, uint256(), currencyDef});
+    }
+    else
+    {
+        currencyDefCache.Put(currencyID, {height, chainActive[height]->GetBlockHash(), currencyDef});
+    }
     if (currencyID == ASSETCHAINS_CHAINID)
     {
         ThisChain() = currencyDef;

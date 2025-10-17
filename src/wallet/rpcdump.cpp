@@ -910,9 +910,22 @@ UniValue z_getencryptionaddress(const UniValue& params, bool fHelp)
     std::string strRootkey = uni_get_str(find_value(params[0], "rootkey"));
     int64_t hdIndex = uni_get_int64(find_value(params[0], "hdindex"));
     int64_t encryptionIndex = uni_get_int64(find_value(params[0], "encryptionindex"));
-    CIdentityID fromID = GetDestinationID(DecodeDestination(uni_get_str(find_value(params[0], "fromid"))));
-    CIdentityID toID = GetDestinationID(DecodeDestination(uni_get_str(find_value(params[0], "toid"))));
+
+    std::string fromIDStr = uni_get_str(find_value(params[0], "fromid"));
+    CTxDestination fromIDDest = DecodeDestination(fromIDStr);
+    CIdentityID fromID = GetDestinationID(fromIDDest);
+
+    std::string toIDStr = uni_get_str(find_value(params[0], "toid"));
+    CTxDestination toIDDest = DecodeDestination(toIDStr);
+    CIdentityID toID = GetDestinationID(toIDDest);
+
     bool returnSecret = uni_get_bool(find_value(params[0], "returnsecret"));
+
+    if ((!fromIDStr.empty() && fromIDDest.which() != COptCCParams::ADDRTYPE_ID) ||
+        (!toIDStr.empty() && toIDDest.which() != COptCCParams::ADDRTYPE_ID))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "If fromid or toid parameters are provided, they must be valid identity specifications or i-addresses");
+    }
 
     if (((int)strAddress.empty() + (int)strSeed.empty() + (int)strRootkey.empty()) != 2)
     {

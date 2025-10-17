@@ -581,7 +581,7 @@ UniValue clearrawmempool(const UniValue& params, bool fHelp)
             + HelpExampleRpc("clearrawmempool", "")
         );
 
-    LOCK(cs_main);
+    LOCK2(cs_main, mempool.cs);
 
     mempool.clear();
     ClearMainCaches();

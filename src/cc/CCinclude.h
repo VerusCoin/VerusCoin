@@ -73,7 +73,6 @@ extern CWallet* pwalletMain;
 #endif
 bool GetAddressUnspent(const uint160& addressHash, int type, std::vector<CAddressUnspentDbEntry>& unspentOutputs);
 
-static const uint256 zeroid;
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock, bool checkMempool=true);
 int32_t is_hexstr(char *str,int32_t n);
 bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, int32_t simHeight = 0, bool limitFree=true, bool limitDust=true, bool *missinginputs = NULL);

@@ -1561,7 +1561,7 @@ bool PrecheckCrossChainExport(const CTransaction &tx, int32_t outNum, CValidatio
         // ensure we use the correct condition
         // and that there is no risk of missing valid transfers with the check we end up with here
         if (ccx.sourceHeightStart > 0 &&
-            (!GetChainTransfersUnspentBy(inputDescriptors, ccx.destCurrencyID, ccx.sourceHeightStart, ccx.sourceHeightEnd, height) ||
+            (!GetChainTransfersUnspentBy(inputDescriptors, ccx.destCurrencyID, ccx.sourceHeightStart, ccx.sourceHeightEnd, height, tx.GetHash()) ||
              !GetChainTransfersBetween(inputDescriptors, ccx.destCurrencyID, ccx.sourceHeightEnd + 1, std::min(height, ccx.sourceHeightEnd + 2))))
         {
             return state.Error("Error retrieving cross chain transfers");

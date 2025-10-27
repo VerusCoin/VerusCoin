@@ -3899,7 +3899,7 @@ LRUCache<std::tuple<uint160, uint256, uint32_t>, std::vector<CInputDescriptor>> 
 
 // returns all chain transfer outputs, both spent and unspent between a specific start and end block with an optional chainFilter. if the chainFilter is not
 // NULL, only transfers to that system are returned
-bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std::pair<CInputDescriptor, CReserveTransfer>> &inputDescriptors, uint160 chainFilter, uint32_t start, uint32_t end, uint32_t unspentBy, uint32_t flags)
+bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std::pair<CInputDescriptor, CReserveTransfer>> &inputDescriptors, uint160 chainFilter, uint32_t start, uint32_t end, uint32_t unspentBy, const uint256 &checkingTxHash, uint32_t flags)
 {
     if (!flags)
     {
@@ -3951,7 +3951,7 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
         {
             for (auto &onePair : blocksToLoad)
             {
-                if (!GetChainTransfersUnspentBy(inputDescriptors, chainFilter, onePair.first, onePair.second, unspentBy, flags))
+                if (!GetChainTransfersUnspentBy(inputDescriptors, chainFilter, onePair.first, onePair.second, unspentBy, checkingTxHash, flags))
                 {
                     return false;
                 }
@@ -3989,6 +3989,7 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
 
             if (GetSpentIndex(spentKey, spentInfo) &&
                 !spentInfo.IsNull() &&
+                spentInfo.txid != checkingTxHash &&
                 spentInfo.blockHeight < unspentBy)
             {
                 continue;

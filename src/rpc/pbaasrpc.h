@@ -32,7 +32,7 @@ bool GetNotarizationData(const uint160 &chainID,
 bool GetChainTransfers(std::multimap<uint160, std::pair<CInputDescriptor, CReserveTransfer>> &inputDescriptors,
                             uint160 chainFilter = uint160(), int start=0, int end=0, uint32_t flags=CReserveTransfer::VALID);
 bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std::pair<CInputDescriptor, CReserveTransfer>> &inputDescriptors,
-                            uint160 chainFilter, uint32_t start, uint32_t end, uint32_t unspentBy, uint32_t flags=CReserveTransfer::VALID);
+                            uint160 chainFilter, uint32_t start, uint32_t end, uint32_t unspentBy, const uint256 &checkingTxHash, uint32_t flags=CReserveTransfer::VALID);
 bool GetChainTransfersBetween(std::multimap<std::pair<uint32_t, uint160>, std::pair<CInputDescriptor, CReserveTransfer>> &inputDescriptors,
                             uint160 chainFilter, uint32_t start, uint32_t end, uint32_t flags=CReserveTransfer::VALID);
 bool GetUnspentChainTransfers(std::multimap<uint160, ChainTransferData> &inputDescriptors, uint160 chainFilter = uint160());

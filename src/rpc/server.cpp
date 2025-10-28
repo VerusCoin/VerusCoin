@@ -300,7 +300,6 @@ static const CRPCCommand vRPCCommands[] =
     //{ "blockchain",         "height_MoM",             &height_MoM,             true  },
     //{ "blockchain",         "txMoMproof",             &txMoMproof,             true  },
     { "blockchain",         "minerids",               &minerids,               true  },
-    { "blockchain",         "kvsearch",               &kvsearch,               true  },
     { "blockchain",         "kvupdate",               &kvupdate,               true  },
 
     /* Mining */

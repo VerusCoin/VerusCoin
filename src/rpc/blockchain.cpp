@@ -1195,63 +1195,6 @@ int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *bas
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 int32_t komodo_minerids(uint8_t *minerids,int32_t height,int32_t width);
-int32_t komodo_kvsearch(uint256 *refpubkeyp,int32_t current_height,uint32_t *flagsp,int32_t *heightp,uint8_t value[IGUANA_MAXSCRIPTSIZE],uint8_t *key,int32_t keylen);
-
-UniValue kvsearch(const UniValue& params, bool fHelp)
-{
-    UniValue ret(UniValue::VOBJ); uint32_t flags; uint8_t value[IGUANA_MAXSCRIPTSIZE*8],key[IGUANA_MAXSCRIPTSIZE*8]; int32_t duration,j,height,valuesize,keylen; uint256 refpubkey; static uint256 zeroes;
-    if (fHelp || params.size() != 1 )
-        throw runtime_error(
-            "kvsearch key\n"
-            "\nSearch for a key stored via the kvupdate command. This feature is only available for asset chains.\n"
-            "\nArguments:\n"
-            "1. key                      (string, required) search the chain for this key\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"coin\": \"xxxxx\",          (string) chain the key is stored on\n"
-            "  \"currentheight\": xxxxx,     (numeric) current height of the chain\n"
-            "  \"key\": \"xxxxx\",           (string) key\n"
-            "  \"keylen\": xxxxx,            (string) length of the key \n"
-            "  \"owner\": \"xxxxx\"          (string) hex string representing the owner of the key \n"
-            "  \"height\": xxxxx,            (numeric) height the key was stored at\n"
-            "  \"expiration\": xxxxx,        (numeric) height the key will expire\n"
-            "  \"flags\": x                  (numeric) 1 if the key was created with a password; 0 otherwise.\n"
-            "  \"value\": \"xxxxx\",         (string) stored value\n"
-            "  \"valuesize\": xxxxx          (string) amount of characters stored\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("kvsearch", "examplekey")
-            + HelpExampleRpc("kvsearch", "examplekey")
-        );
-    LOCK(cs_main);
-    if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
-    {
-        ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
-        ret.push_back(Pair("currentheight", (int64_t)chainActive.LastTip()->GetHeight()));
-        ret.push_back(Pair("key",params[0].get_str()));
-        ret.push_back(Pair("keylen",keylen));
-        if ( keylen < sizeof(key) )
-        {
-            memcpy(key,params[0].get_str().c_str(),keylen);
-            if ( (valuesize= komodo_kvsearch(&refpubkey,chainActive.LastTip()->GetHeight(),&flags,&height,value,key,keylen)) >= 0 )
-            {
-                std::string val; char *valuestr;
-                val.resize(valuesize);
-                valuestr = (char *)val.data();
-                memcpy(valuestr,value,valuesize);
-                if ( memcmp(&zeroes,&refpubkey,sizeof(refpubkey)) != 0 )
-                    ret.push_back(Pair("owner",refpubkey.GetHex()));
-                ret.push_back(Pair("height",height));
-                duration = ((flags >> 2) + 1) * KOMODO_KVDURATION;
-                ret.push_back(Pair("expiration", (int64_t)(height+duration)));
-                ret.push_back(Pair("flags",(int64_t)flags));
-                ret.push_back(Pair("value",val));
-                ret.push_back(Pair("valuesize",valuesize));
-            } else ret.push_back(Pair("error",(char *)"cant find key"));
-        } else ret.push_back(Pair("error",(char *)"key too big"));
-    } else ret.push_back(Pair("error",(char *)"null key"));
-    return ret;
-}
 
 UniValue minerids(const UniValue& params, bool fHelp)
 {

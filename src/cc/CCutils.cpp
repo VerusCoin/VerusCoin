@@ -149,6 +149,7 @@ bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey)
     return(false);
 }
 
+// FIXME Alright used by StakeGuard
 bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
                  CTransaction &txOut, std::vector<std::vector<unsigned char>> &preConditions, std::vector<std::vector<unsigned char>> &params)
 {
@@ -190,24 +191,14 @@ bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
     return false;
 }
 
-bool GetCCaddress1of2(struct CCcontract_info *cp,char *destaddr,CPubKey pk,CPubKey pk2)
-{
-    CC *payoutCond;
-    destaddr[0] = 0;
-    if ( (payoutCond= MakeCCcond1of2(cp->evalcode,pk,pk2)) != 0 )
-    {
-        Getscriptaddress(destaddr,CCPubKey(payoutCond));
-        cc_free(payoutCond);
-    }
-    return(destaddr[0] != 0);
-}
-
+// FIXME Alright used by StakeGuard
 CPubKey GetUnspendable(struct CCcontract_info *cp,uint8_t *unspendablepriv)
 {
     if ( unspendablepriv != 0 )
         memcpy(unspendablepriv,cp->CCpriv,32);
     return(pubkey2pk(ParseHex(cp->CChexstr)));
 }
+
 // FIXME Alright used within Eval::Dispatch
 bool ProcessCC(struct CCcontract_info *cp, Eval* eval, std::vector<uint8_t> paramsNull,const CTransaction &ctx, unsigned int nIn, bool fulfilled)
 {

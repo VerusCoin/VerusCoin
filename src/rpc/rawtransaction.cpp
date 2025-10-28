@@ -135,19 +135,6 @@ UniValue TxShieldedOutputsToJSON(const CTransaction& tx) {
     return vdesc;
 }
 
-int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout)
-{
-    CSpentIndexValue spentInfo; CSpentIndexKey spentKey(txid,vout);
-    if ( GetSpentIndex(spentKey,spentInfo) )
-    {
-        spenttxid = spentInfo.txid;
-        return((int32_t)spentInfo.inputIndex);
-        // out.push_back(Pair("spentHeight", spentInfo.blockHeight));
-    }
-    memset(&spenttxid,0,sizeof(spenttxid));
-    return(-1);
-}
-
 void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)
 {
     uint256 txid = tx.GetHash();

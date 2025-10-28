@@ -89,7 +89,6 @@ CC* GetCryptoCondition(CScript const& scriptSig)
     return nullptr;
 }
 
-// FIXME Alright - used by StakeGuard
 CPubKey pubkey2pk(std::vector<uint8_t> pubkey)
 {
     CPubKey pk; int32_t i,n; uint8_t *dest,*pubkey33;
@@ -101,7 +100,6 @@ CPubKey pubkey2pk(std::vector<uint8_t> pubkey)
     return(pk);
 }
 
-// FIXME Alright used by StakeGuard
 bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
                  CTransaction &txOut, std::vector<std::vector<unsigned char>> &preConditions, std::vector<std::vector<unsigned char>> &params)
 {
@@ -143,7 +141,6 @@ bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
     return false;
 }
 
-// FIXME Alright used by StakeGuard
 CPubKey GetUnspendable(struct CCcontract_info *cp,uint8_t *unspendablepriv)
 {
     if ( unspendablepriv != 0 )
@@ -151,7 +148,6 @@ CPubKey GetUnspendable(struct CCcontract_info *cp,uint8_t *unspendablepriv)
     return(pubkey2pk(ParseHex(cp->CChexstr)));
 }
 
-// FIXME Alright used within Eval::Dispatch
 bool ProcessCC(struct CCcontract_info *cp, Eval* eval, std::vector<uint8_t> paramsNull,const CTransaction &ctx, unsigned int nIn, bool fulfilled)
 {
     CTransaction createTx; uint256 assetid,assetid2,hashBlock; uint8_t funcid; int32_t height,i,n,from_mempool = 0; int64_t amount; std::vector<uint8_t> origpubkey;

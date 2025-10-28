@@ -89,8 +89,6 @@ CC *MakeCCcondMofN(uint8_t evalcode, const std::vector<CTxDestination> &dests, i
 CC *MakeCCcondMofN(uint8_t evalcode, const std::vector<CC*> &conditions, int M);
 CC *GetCryptoCondition(CScript const& scriptSig);
 std::vector<unsigned char> GetFulfillmentVector(CScript const& scriptSig);
-void CCaddr2set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr);
-void CCaddr3set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr);
 CPubKey pubkey2pk(std::vector<uint8_t> pubkey);
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey);
 

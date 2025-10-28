@@ -101,22 +101,6 @@ CPubKey pubkey2pk(std::vector<uint8_t> pubkey)
     return(pk);
 }
 
-void CCaddr2set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr)
-{
-    cp->evalcode2 = evalcode;
-    cp->unspendablepk2 = pk;
-    memcpy(cp->unspendablepriv2,priv,32);
-    strcpy(cp->unspendableaddr2,coinaddr);
-}
-
-void CCaddr3set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr)
-{
-    cp->evalcode3 = evalcode;
-    cp->unspendablepk3 = pk;
-    memcpy(cp->unspendablepriv3,priv,32);
-    strcpy(cp->unspendableaddr3,coinaddr);
-}
-
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey)
 {
     CTxDestination address; 

@@ -1499,12 +1499,17 @@ bool ContextualCheckTransaction(
                 }
                 if (!CC.contextualprecheck(tx, i, state, nHeight))
                 {
-                    if (LogAcceptCategory("precheck"))
+                    if (LogAcceptCategory("precheck") || LogAcceptCategory("precheckdetails"))
                     {
-                        UniValue txJson(UniValue::VOBJ);
-                        uint256 dummyHash;
-                        TxToUniv(tx, dummyHash, txJson);
-                        LogPrintf("%s: precheck failed: reason: %s\noutput %d on tx: %s\n", __func__, state.GetRejectReason().c_str(), i, txJson.write(1,2).c_str());
+                        LogPrintf("%s: precheck failed: reason: %s\noutput %d", __func__, state.GetRejectReason().c_str(), i);
+                        if (LogAcceptCategory("precheckdetails"))
+                        {
+                            UniValue txJson(UniValue::VOBJ);
+                            uint256 dummyHash;
+                            TxToUniv(tx, dummyHash, txJson);
+                            LogPrintf(" on tx: %s", __func__, state.GetRejectReason().c_str(), i, txJson.write(1,2).c_str());
+                        }
+                        LogPrintf("\n");
                     }
                     return state.DoS(10, error(state.GetRejectReason().c_str()), REJECT_INVALID, "bad-txns-failed-precheck" );
                 }

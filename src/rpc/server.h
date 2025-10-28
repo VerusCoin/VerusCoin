@@ -337,9 +337,6 @@ extern UniValue z_validatepaymentdisclosure(const UniValue &params, bool fHelp);
 
 extern UniValue notaries(const UniValue& params, bool fHelp);
 extern UniValue minerids(const UniValue& params, bool fHelp);
-extern UniValue paxprice(const UniValue& params, bool fHelp);
-extern UniValue paxpending(const UniValue& params, bool fHelp);
-extern UniValue paxprices(const UniValue& params, bool fHelp);
 extern UniValue paxdeposit(const UniValue& params, bool fHelp);
 extern UniValue paxwithdraw(const UniValue& params, bool fHelp);
 

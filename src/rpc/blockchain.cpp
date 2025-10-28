@@ -1190,8 +1190,6 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
 #define KOMODO_KVBINARY 2
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern int32_t ASSETCHAINS_LWMAPOS;
-uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uint64_t basevolume);
-int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *base,char *rel);
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 int32_t komodo_minerids(uint8_t *minerids,int32_t height,int32_t width);
@@ -1307,115 +1305,6 @@ UniValue notaries(const UniValue& params, bool fHelp)
     ret.push_back(Pair("numnotaries", n));
     ret.push_back(Pair("height", height));
     ret.push_back(Pair("timestamp", (uint64_t)timestamp));
-    return ret;
-}
-
-int32_t komodo_pending_withdraws(char *opretstr);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
-extern char CURRENCIES[][8];
-
-UniValue paxpending(const UniValue& params, bool fHelp)
-{
-    UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR); char opretbuf[10000*2]; int32_t opretlen,baseid; uint64_t available,deposited,issued,withdrawn,approved,redeemed;
-    if ( fHelp || params.size() != 0 )
-        throw runtime_error("paxpending needs no args\n");
-    LOCK(cs_main);
-    if ( (opretlen= komodo_pending_withdraws(opretbuf)) > 0 )
-        ret.push_back(Pair("withdraws", opretbuf));
-    else ret.push_back(Pair("withdraws", (char *)""));
-    for (baseid=0; baseid<32; baseid++)
-    {
-        UniValue item(UniValue::VOBJ); UniValue obj(UniValue::VOBJ);
-        if ( pax_fiatstatus(&available,&deposited,&issued,&withdrawn,&approved,&redeemed,CURRENCIES[baseid]) == 0 )
-        {
-            if ( deposited != 0 || issued != 0 || withdrawn != 0 || approved != 0 || redeemed != 0 )
-            {
-                item.push_back(Pair("available", ValueFromAmount(available)));
-                item.push_back(Pair("deposited", ValueFromAmount(deposited)));
-                item.push_back(Pair("issued", ValueFromAmount(issued)));
-                item.push_back(Pair("withdrawn", ValueFromAmount(withdrawn)));
-                item.push_back(Pair("approved", ValueFromAmount(approved)));
-                item.push_back(Pair("redeemed", ValueFromAmount(redeemed)));
-                obj.push_back(Pair(CURRENCIES[baseid],item));
-                a.push_back(obj);
-            }
-        }
-    }
-    ret.push_back(Pair("fiatstatus", a));
-    return ret;
-}
-
-UniValue paxprice(const UniValue& params, bool fHelp)
-{
-    if ( fHelp || params.size() > 4 || params.size() < 2 )
-        throw runtime_error("paxprice \"base\" \"rel\" height\n");
-    LOCK(cs_main);
-    UniValue ret(UniValue::VOBJ); uint64_t basevolume=0,relvolume,seed;
-    std::string base = params[0].get_str();
-    std::string rel = params[1].get_str();
-    int32_t height;
-    if ( params.size() == 2 )
-        height = chainActive.LastTip()->GetHeight();
-    else height = atoi(params[2].get_str().c_str());
-    //if ( params.size() == 3 || (basevolume= COIN * atof(params[3].get_str().c_str())) == 0 )
-        basevolume = 100000;
-    relvolume = komodo_paxprice(&seed,height,(char *)base.c_str(),(char *)rel.c_str(),basevolume);
-    ret.push_back(Pair("base", base));
-    ret.push_back(Pair("rel", rel));
-    ret.push_back(Pair("height", height));
-    char seedstr[32];
-    sprintf(seedstr,"%llu",(long long)seed);
-    ret.push_back(Pair("seed", seedstr));
-    if ( height < 0 || height > chainActive.Height() )
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-    else
-    {
-        CBlockIndex *pblockindex = chainActive[height];
-        if ( pblockindex != 0 )
-            ret.push_back(Pair("timestamp", (int64_t)pblockindex->nTime));
-        if ( basevolume != 0 && relvolume != 0 )
-        {
-            ret.push_back(Pair("price",((double)relvolume / (double)basevolume)));
-            ret.push_back(Pair("invprice",((double)basevolume / (double)relvolume)));
-            ret.push_back(Pair("basevolume",ValueFromAmount(basevolume)));
-            ret.push_back(Pair("relvolume",ValueFromAmount(relvolume)));
-        } else ret.push_back(Pair("error", "overflow or error in one or more of parameters"));
-    }
-    return ret;
-}
-
-UniValue paxprices(const UniValue& params, bool fHelp)
-{
-    if ( fHelp || params.size() != 3 )
-        throw runtime_error("paxprices \"base\" \"rel\" maxsamples\n");
-    LOCK(cs_main);
-    UniValue ret(UniValue::VOBJ); uint64_t relvolume,prices[4096]; uint32_t i,n; int32_t heights[sizeof(prices)/sizeof(*prices)];
-    std::string base = params[0].get_str();
-    std::string rel = params[1].get_str();
-    int32_t maxsamples = atoi(params[2].get_str().c_str());
-    if ( maxsamples < 1 )
-        maxsamples = 1;
-    else if ( maxsamples > sizeof(heights)/sizeof(*heights) )
-        maxsamples = sizeof(heights)/sizeof(*heights);
-    ret.push_back(Pair("base", base));
-    ret.push_back(Pair("rel", rel));
-    n = komodo_paxprices(heights,prices,maxsamples,(char *)base.c_str(),(char *)rel.c_str());
-    UniValue a(UniValue::VARR);
-    for (i=0; i<n; i++)
-    {
-        UniValue item(UniValue::VOBJ);
-        if ( heights[i] < 0 || heights[i] > chainActive.Height() )
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-        else
-        {
-            CBlockIndex *pblockindex = chainActive[heights[i]];
-
-            item.push_back(Pair("t", (int64_t)pblockindex->nTime));
-            item.push_back(Pair("p", (double)prices[i] / COIN));
-            a.push_back(item);
-        }
-    }
-    ret.push_back(Pair("array", a));
     return ret;
 }
 

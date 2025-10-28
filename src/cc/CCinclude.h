@@ -89,8 +89,6 @@ bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
 CPubKey GetUnspendable(struct CCcontract_info *cp,uint8_t *unspendablepriv);
 
 // CCutils
-CPubKey buf2pk(uint8_t *buf33);
-CTxOut MakeCC1vout(uint8_t evalcode,CAmount nValue,CPubKey pk);
 CTxOut MakeCC1of2vout(uint8_t evalcode,CAmount nValue,CPubKey pk,CPubKey pk2);
 CC *MakeCCcond1(uint8_t evalcode,CPubKey pk);
 CC *MakeCCcond1(uint8_t evalcode,CTxDestination dest);
@@ -103,8 +101,6 @@ std::vector<unsigned char> GetFulfillmentVector(CScript const& scriptSig);
 void CCaddr2set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr);
 void CCaddr3set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr);
 CPubKey pubkey2pk(std::vector<uint8_t> pubkey);
-bool _GetCCaddress(char *destaddr,uint8_t evalcode,CPubKey pk);
-bool GetCCaddress(struct CCcontract_info *cp,char *destaddr,CPubKey pk);
 bool GetCCaddress1of2(struct CCcontract_info *cp,char *destaddr,CPubKey pk,CPubKey pk2);
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey);
 

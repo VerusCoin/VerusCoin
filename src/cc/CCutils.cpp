@@ -77,15 +77,6 @@ CC *MakeCCcondAny(uint8_t evalcode, std::vector<CTxDestination> dests)
     return CCNewThreshold(2, {condCC, Sig});
 }
 
-CTxOut MakeCC1vout(uint8_t evalcode, CAmount nValue, CPubKey pk)
-{
-    CTxOut vout;
-    CC *payoutCond = MakeCCcond1(evalcode,pk);
-    vout = CTxOut(nValue,CCPubKey(payoutCond));
-    cc_free(payoutCond);
-    return(vout);
-}
-
 CTxOut MakeCC1of2vout(uint8_t evalcode,CAmount nValue,CPubKey pk1,CPubKey pk2)
 {
     CTxOut vout;
@@ -115,15 +106,7 @@ CC* GetCryptoCondition(CScript const& scriptSig)
     return nullptr;
 }
 
-CPubKey buf2pk(uint8_t *buf33)
-{
-    CPubKey pk; int32_t i; uint8_t *dest;
-    dest = (uint8_t *)pk.begin();
-    for (i=0; i<33; i++)
-        dest[i] = buf33[i];
-    return(pk);
-}
-
+// FIXME Alright - used by StakeGuard
 CPubKey pubkey2pk(std::vector<uint8_t> pubkey)
 {
     CPubKey pk; int32_t i,n; uint8_t *dest,*pubkey33;
@@ -205,26 +188,6 @@ bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
         }
     }
     return false;
-}
-
-bool _GetCCaddress(char *destaddr,uint8_t evalcode,CPubKey pk)
-{
-    CC *payoutCond;
-    destaddr[0] = 0;
-    if ( (payoutCond= MakeCCcond1(evalcode,pk)) != 0 )
-    {
-        Getscriptaddress(destaddr,CCPubKey(payoutCond));
-        cc_free(payoutCond);
-    }
-    return(destaddr[0] != 0);
-}
-
-bool GetCCaddress(struct CCcontract_info *cp,char *destaddr,CPubKey pk)
-{
-    destaddr[0] = 0;
-    if ( pk.size() == 0 )
-        pk = GetUnspendable(cp,0);
-    return(_GetCCaddress(destaddr,cp->evalcode,pk));
 }
 
 bool GetCCaddress1of2(struct CCcontract_info *cp,char *destaddr,CPubKey pk,CPubKey pk2)

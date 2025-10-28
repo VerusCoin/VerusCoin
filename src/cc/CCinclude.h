@@ -52,7 +52,6 @@ one other technical note is that komodod has the insight-explorer extensions bui
 
 extern int32_t KOMODO_CONNECTING,KOMODO_CCACTIVATE;
 extern uint32_t ASSETCHAINS_CC;
-extern std::string CCerror;
 
 #define SMALLVAL 0.000000000000001
 
@@ -74,13 +73,7 @@ extern CWallet* pwalletMain;
 bool GetAddressUnspent(const uint160& addressHash, int type, std::vector<CAddressUnspentDbEntry>& unspentOutputs);
 
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock, bool checkMempool=true);
-int32_t is_hexstr(char *str,int32_t n);
 bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, int32_t simHeight = 0, bool limitFree=true, bool limitDust=true, bool *missinginputs = NULL);
-//uint64_t myGettxout(uint256 hash,int32_t n);
-int32_t decode_hex(uint8_t *bytes,int32_t n,char *hex);
-int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
-int32_t iguana_rwbignum(int32_t rwflag,uint8_t *serialized,int32_t len,uint8_t *endianedp);
-CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys);
 bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
                  CTransaction &txOut, std::vector<std::vector<unsigned char>> &preConditions, std::vector<std::vector<unsigned char>> &params);
 
@@ -90,7 +83,6 @@ CPubKey GetUnspendable(struct CCcontract_info *cp,uint8_t *unspendablepriv);
 // CCutils
 CTxOut MakeCC1of2vout(uint8_t evalcode,CAmount nValue,CPubKey pk,CPubKey pk2);
 CC *MakeCCcond1(uint8_t evalcode,CPubKey pk);
-CC *MakeCCcond1(uint8_t evalcode,CTxDestination dest);
 CC *MakeCCcondAny(uint8_t evalcode,std::vector<CTxDestination> dests);
 CC *MakeCCcond1of2(uint8_t evalcode,CPubKey pk1,CPubKey pk2);
 CC *MakeCCcondMofN(uint8_t evalcode, const std::vector<CTxDestination> &dests, int M);

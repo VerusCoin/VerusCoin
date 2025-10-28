@@ -1453,6 +1453,7 @@ public:
     }
 };
 
+// FIXME Alright - seemingly dead code but ask Mike about it
 template <typename TOBJ>
 CTxOut MakeCC1of1Vout(uint8_t evalcode, CAmount nValue, CPubKey pk, std::vector<CTxDestination> vDest, const TOBJ &obj)
 {
@@ -1471,6 +1472,7 @@ CTxOut MakeCC1of1Vout(uint8_t evalcode, CAmount nValue, CPubKey pk, std::vector<
     return(vout);
 }
 
+// FIXME Alright - seemingly dead code but ask Mike about it
 template <typename TOBJ>
 CTxOut MakeCC1ofAnyVout(uint8_t evalcode, CAmount nValue, std::vector<CTxDestination> vDest, const TOBJ &obj, const CPubKey &pk=CPubKey())
 {

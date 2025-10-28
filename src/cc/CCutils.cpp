@@ -101,21 +101,6 @@ CPubKey pubkey2pk(std::vector<uint8_t> pubkey)
     return(pk);
 }
 
-bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey)
-{
-    CTxDestination address; 
-    txnouttype whichType;
-    std::vector<std::vector<unsigned char>> vvch = std::vector<std::vector<unsigned char>>();
-    if (Solver(scriptPubKey, whichType, vvch) && vvch[0].size() == 20)
-    {
-        address = CKeyID(uint160(vvch[0]));
-        strcpy(destaddr,(char *)CBitcoinAddress(address).ToString().c_str());
-        return(true);
-    }
-    fprintf(stderr,"Solver for scriptPubKey failed\n%s\n", scriptPubKey.ToString().c_str());
-    return(false);
-}
-
 // FIXME Alright used by StakeGuard
 bool GetCCParams(Eval* eval, const CTransaction &tx, uint32_t nIn,
                  CTransaction &txOut, std::vector<std::vector<unsigned char>> &preConditions, std::vector<std::vector<unsigned char>> &params)

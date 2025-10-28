@@ -110,21 +110,6 @@ public:
     virtual bool Dispatch(const CC *cond, const CTransaction &tx, unsigned int nIn, bool fulfilled);
 
     /*
-     * Dispute a payout using a VM
-     */
-    bool DisputePayout(AppVM &vm, std::vector<uint8_t> params, const CTransaction &disputeTx, unsigned int nIn);
-
-    /*
-     * Test an ImportPayout CC Eval condition
-     */
-    bool ImportPayout(std::vector<uint8_t> params, const CTransaction &importTx, unsigned int nIn);
-
-    /*
-     * Import coin from another chain with same symbol
-     */
-    bool ImportCoin(std::vector<uint8_t> params, const CTransaction &importTx, unsigned int nIn);
-
-    /*
      * IO functions
      */
     virtual bool GetTxUnconfirmed(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock) const;
@@ -306,7 +291,6 @@ typedef std::pair<uint256,MerkleBranch> TxProof;
 
 bool DefaultCCContextualPreCheck(const CTransaction &tx, int32_t outNum, CValidationState &state, uint32_t height);
 bool EvalNoneContextualPreCheck(const CTransaction &tx, int32_t outNum, CValidationState &state, uint32_t height);
-uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves);
 struct CCcontract_info *CCinit(struct CCcontract_info *cp,uint8_t evalcode);
 bool ProcessCC(struct CCcontract_info *cp,Eval* eval, std::vector<uint8_t> paramsNull, const CTransaction &tx, unsigned int nIn, bool fulfilled);
 

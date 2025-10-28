@@ -247,11 +247,3 @@ uint256 SafeCheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleB
     }
     return hash;
 }
-
-
-uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves)
-{
-    bool fMutated;
-    std::vector<uint256> vMerkleTree;
-    return BuildMerkleTree(&fMutated, vLeaves, vMerkleTree);
-}

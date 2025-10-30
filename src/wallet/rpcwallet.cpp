@@ -505,20 +505,6 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
 
 #include "komodo_defs.h"
 
-#define KOMODO_KVPROTECTED 1
-#define KOMODO_KVBINARY 2
-#define KOMODO_KVDURATION 1440
-#define IGUANA_MAXSCRIPTSIZE 10001
-uint64_t PAX_fiatdest(uint64_t *seedp,int32_t tokomodo,char *destaddr,uint8_t pubkey37[37],char *coinaddr,int32_t height,char *base,int64_t fiatoshis);
-int32_t komodo_opreturnscript(uint8_t *script,uint8_t type,uint8_t *opret,int32_t opretlen);
-#define CRYPTO777_KMDADDR "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
-extern int32_t KOMODO_PAX;
-extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
-int32_t komodo_is_issuer();
-int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
-int32_t komodo_isrealtime(int32_t *kmdheightp);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
-
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))
@@ -4829,14 +4815,7 @@ UniValue listunspent(const UniValue& params, bool fHelp)
 
 uint64_t komodo_interestsum()
 {
-#ifdef ENABLE_WALLET
-    if ( GetBoolArg("-disablewallet", false) == 0 )
-    {
-        KOMODO_INTERESTSUM = 0;
-        KOMODO_WALLETBALANCE = pwalletMain->GetBalance();
-        return(0);
-    }
-#endif
+    // FIXME Alright - remove this
     return(0);
 }
 
@@ -6456,11 +6435,9 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp)
     // so we use our own method to get balance of utxos.
     CAmount nBalance = getBalanceTaddr("", nMinDepth, !fIncludeWatchonly);
     CAmount nPrivateBalance = getBalanceZaddr("", nMinDepth, !fIncludeWatchonly);
-    uint64_t interest = komodo_interestsum();
     CAmount nTotalBalance = nBalance + nPrivateBalance;
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("transparent", FormatMoney(nBalance)));
-    //result.push_back(Pair("interest", FormatMoney(interest)));
     result.push_back(Pair("private", FormatMoney(nPrivateBalance)));
     result.push_back(Pair("total", FormatMoney(nTotalBalance)));
     return result;

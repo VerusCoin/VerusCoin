@@ -337,7 +337,5 @@ extern UniValue z_validatepaymentdisclosure(const UniValue &params, bool fHelp);
 
 extern UniValue notaries(const UniValue& params, bool fHelp);
 extern UniValue minerids(const UniValue& params, bool fHelp);
-extern UniValue paxdeposit(const UniValue& params, bool fHelp);
-extern UniValue paxwithdraw(const UniValue& params, bool fHelp);
 
 #endif // BITCOIN_RPCSERVER_H

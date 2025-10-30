@@ -503,8 +503,6 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp)
     return wtx.GetHash().GetHex();
 }
 
-#include "komodo_defs.h"
-
 UniValue listaddressgroupings(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))

@@ -1507,7 +1507,7 @@ bool ContextualCheckTransaction(
                             UniValue txJson(UniValue::VOBJ);
                             uint256 dummyHash;
                             TxToUniv(tx, dummyHash, txJson);
-                            LogPrintf(" on tx: %s", __func__, state.GetRejectReason().c_str(), i, txJson.write(1,2).c_str());
+                            LogPrintf(" on tx: %s", txJson.write(1,2).c_str());
                         }
                         LogPrintf("\n");
                     }

@@ -2,7 +2,11 @@
 #define SPX_HARAKA_H
 
 #if defined(__arm__) || defined(__aarch64__)
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10
+#include "crypto/compat/sse2neon.h"
+#else
 #include "crypto/sse2neon.h"
+#endif
 #else
 #include "immintrin.h"
 #endif

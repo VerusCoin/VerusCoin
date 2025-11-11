@@ -29,7 +29,11 @@
 int __cpuverusoptimized = 0x80;
 
 #if defined(__arm__)  || defined(__aarch64__)
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10
+#include "crypto/compat/sse2neon.h"
+#else
 #include "crypto/sse2neon.h"
+#endif
 #else
 #include <x86intrin.h>
 #endif

@@ -27,7 +27,11 @@ Optimized Implementations for Haraka256 and Haraka512
 #define HARAKA_H_
 
 #if defined(__arm__)  || defined(__aarch64__)
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10
+#include "crypto/compat/sse2neon.h"
+#else
 #include "crypto/sse2neon.h"
+#endif
 #else // !WIN32
 #include "immintrin.h"
 #endif

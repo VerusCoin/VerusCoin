@@ -654,7 +654,7 @@ class CCompactSolutionVector
         {
             CCompactSolutionVector newVec(_vch);
             *this = newVec;
-            LogPrint("compactsolution", "Original vector:\n%s\nnewVec:\n%s\n", HexBytes(_vch.data(), _vch.size()), HexBytes(this->nSolution().data(), this->nSolution().size()));
+            // LogPrint("compactsolution", "Original vector:\n%s\nnewVec:\n%s\n", HexBytes(_vch.data(), _vch.size()), HexBytes(this->nSolution().data(), this->nSolution().size()));
             return *this;
         }
 

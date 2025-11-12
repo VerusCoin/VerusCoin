@@ -1,6 +1,6 @@
 package=zlib
 $(package)_version=1.3.1
-$(package)_download_path=https://www.zlib.net
+$(package)_download_path=https://www.zlib.net/
 $(package)_file_name=$(package)-$($(package)_version).tar.xz
 $(package)_sha256_hash=38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32
 

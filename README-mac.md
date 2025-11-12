@@ -37,8 +37,17 @@ Get all that installed, then run:
 ```shell
 git clone https://github.com/VerusCoin/VerusCoin.git
 cd VerusCoin
-./zcutil/build-mac.sh
 ./zcutil/fetch-params.sh
+```
+
+For x86 macs:
+```
+./zcutil/build-mac.sh
+```
+
+For Apple silicon:
+```
+./zcutil/build-mac-arm.sh
 ```
 
 Happy Building

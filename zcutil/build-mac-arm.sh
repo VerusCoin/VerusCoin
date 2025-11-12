@@ -43,15 +43,15 @@ fi
 TRIPLET=`./depends/config.guess`
 PREFIX="$(pwd)/depends/$TRIPLET"
 
-make "$@" -C ./depends/ V=1 NO_QT=1 NO_PROTON=1
-
+MACOSX_DEPLOYMENT_TARGET=13.0 make "$@" -C ./depends v=1 NO_PROTON=1 NO_QT=1 HOST=aarch64-apple-darwin
 ./autogen.sh
 
-CPPFLAGS="-I$PREFIX/include -arch x86_64" \
-LDFLAGS="-L$PREFIX/lib -L/usr/local/opt/libb2/lib -arch x86_64 -Wl,-no_pie" \
-CXXFLAGS="-arch x86_64 -I$PREFIX/include -fwrapv -fno-strict-aliasing \
--Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-enum-constexpr-conversion \
--Wno-unknown-warning-option -Werror -Wno-error=attributes -g" \
-./configure --prefix="${PREFIX}" --with-gui=no "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
+# -mcpu=apple-m2 -mcpu=apple-m3 -mcpu=apple-m4 for M2, M3, M4 optimizations
+export CXXFLAGS="-DSSE2NEON_SUPPRESS_WARNINGS -mcpu=apple-m1 -O2 \
+-fwrapv -fno-strict-aliasing -Wno-deprecated-declarations \
+-Wno-deprecated-builtins -Wno-enum-constexpr-conversion \
+-Wno-unknown-warning-option -Werror -Wno-error=attributes" 
+export CFLAGS="-DSSE2NEON_SUPPRESS_WARNINGS -mcpu=apple-m1 -O2"
 
-make "$@" NO_GTEST=1 STATIC=1
+CONFIG_SITE="$PWD/depends/aarch64-apple-darwin/share/config.site" ./configure --enable-tests --disable-bench --with-gui=no --host=aarch64-apple-darwin "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
+MACOSX_DEPLOYMENT_TARGET=13.0 make "$@" STATIC=1

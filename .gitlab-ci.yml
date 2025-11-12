@@ -7,7 +7,7 @@ stages:
 ########################################################################################################################
 variables:
 
-  VERSION: 1.2.12
+  VERSION: 1.2.12-1
 
   VERUS_CLI_ARM64_LINUX: Verus-CLI-Linux-v${VERSION}-arm64.tar.gz
   VERUS_CLI_LINUX_X86_64: Verus-CLI-Linux-v${VERSION}-x86_64.tar.gz

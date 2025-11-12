@@ -522,15 +522,18 @@ CIdentity::GetAggregatedIdentityMultimap(const uint160 &idID,
                     for (auto removeItemCursor = removeItemRange.first; removeItemCursor != removeItemRange.second; removeItemCursor++)
                     {
                         CNativeHashWriter hw;
-                        hw.write((char *)&(std::get<0>(removeItemCursor->second)[0]), std::get<0>(removeItemCursor->second).size());
-
-                        uint256 hashVal = hw.GetHash();
-                        if (hashVal == removeAction.valueHash)
+                        if (std::get<0>(removeItemCursor->second).size())
                         {
-                            itemsToRemove.push_back(removeItemCursor);
-                            if (removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
+                            hw.write((char *)&(std::get<0>(removeItemCursor->second)[0]), std::get<0>(removeItemCursor->second).size());
+
+                            uint256 hashVal = hw.GetHash();
+                            if (hashVal == removeAction.valueHash)
                             {
-                                break;
+                                itemsToRemove.push_back(removeItemCursor);
+                                if (removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
+                                {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -2311,7 +2314,8 @@ bool PrecheckIdentityCommitment(const CTransaction &tx, int32_t outNum, CValidat
         if (tx.vout[outNum].scriptPubKey.IsPayToCryptoCondition(p) &&
             p.IsValid() &&
             p.version >= COptCCParams::VERSION_V3 &&
-            p.vData.size() > 1)
+            p.vData.size() > 1 &&
+            p.vData[0].size() >= 20)
         {
             CCommitmentHash ch(p.vData[0]);
             std::vector<unsigned char> vch;
@@ -2829,6 +2833,10 @@ bool PrecheckIdentityPrimary(const CTransaction &tx, int32_t outNum, CValidation
         // first time through may be null
         if ((!input.prevout.hash.IsNull() && input.prevout.hash == inTx.GetHash()) || myGetTransaction(input.prevout.hash, inTx, blkHash))
         {
+            if (input.prevout.n >= inTx.vout.size())
+            {
+                return state.Error("Invalid, malformed transaction");
+            }
             if (inTx.vout[input.prevout.n].scriptPubKey.IsPayToCryptoCondition(p) &&
                 p.IsValid() &&
                 p.evalCode == EVAL_IDENTITY_PRIMARY &&

@@ -133,3 +133,4 @@ src/cryptoconditions/compile
 #output during builds, symbol tables?
 *.dSYM
 
+configure~

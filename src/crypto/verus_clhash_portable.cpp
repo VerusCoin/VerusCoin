@@ -32,7 +32,11 @@
 #if defined(__i386__) || defined(__X86_64__)
 #include <x86intrin.h>
 #elif defined(__arm__) || defined(__aarch64__)
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 10
+#include "crypto/compat/sse2neon.h"
+#else
 #include "crypto/sse2neon.h"
+#endif
 #endif 
 
 #elif _WIN32

@@ -12838,7 +12838,7 @@ UniValue getcurrencystate(const UniValue& params, bool fHelp)
         }
         UniValue entry(UniValue::VOBJ);
         entry.push_back(Pair("height", i));
-        entry.push_back(Pair("blocktime", importIt->first.second <= chainActive.Height() ? (uint64_t)(chainActive[importIt->first.second]->nTime) : (uint64_t)(chainActive.LastTip()->nTime)));
+        entry.push_back(Pair("blocktime", i <= chainActive.Height() ? (uint64_t)(chainActive[i]->nTime) : (uint64_t)(chainActive.LastTip()->nTime)));
         entry.push_back(Pair("currencystate", currencyState.ToUniValue()));
 
         if (pairVolumePrice.size())

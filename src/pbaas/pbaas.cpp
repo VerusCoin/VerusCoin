@@ -8947,6 +8947,8 @@ bool CConnectedChains::CreateLatestImports(const CCurrencyDefinition &sourceSyst
             else
             {
                 printf("%s: success adding %s to mempool\n", __func__, newImportTx.GetHash().GetHex().c_str());
+
+                // do not relay imports unless they are from a different chain
                 if (!arbitrageTransfersIn.size())
                 {
                     RelayTransaction(newImportTx);
@@ -10931,7 +10933,7 @@ void CConnectedChains::AggregateChainTransfers(const CTransferDestination &feeRe
                             std::list<CTransaction> removed;
                             mempool.removeConflicts(tx, removed);
 
-                            // add to mem pool, prioritize according to the fee we will get, and relay
+                            // add to mem pool, prioritize according to the fee we will get
                             //printf("Created and signed export transaction %s\n", tx.GetHash().GetHex().c_str());
                             //LogPrintf("Created and signed export transaction %s\n", tx.GetHash().GetHex().c_str());
                             CValidationState memPoolState;

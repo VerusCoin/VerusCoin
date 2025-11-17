@@ -8948,11 +8948,19 @@ bool CConnectedChains::CreateLatestImports(const CCurrencyDefinition &sourceSyst
             {
                 printf("%s: success adding %s to mempool\n", __func__, newImportTx.GetHash().GetHex().c_str());
 
-                // do not relay imports unless they are from a different chain
-                if (!arbitrageTransfersIn.size())
+                // do not relay imports unless they are from a different chain, as it will not depend on a
+                // local export transaction
+                if (cci.sourceSystemID != ASSETCHAINS_CHAINID)
                 {
                     RelayTransaction(newImportTx);
                 }
+                /* // or if we have added arbitrage transactions
+                else if (arbitrageTransfersIn.size())
+                {
+                    // before we relay an arbitraged import here, we should relay the associated export
+                    // for now, we won't do this, but to increase the chance that an arbitraged import will be picked up,
+                    // we may want to do so, so consider this a placeholder
+                } */
             }
 
             if (!mempool.mapTx.count(newImportTx.GetHash()))

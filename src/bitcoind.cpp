@@ -45,7 +45,6 @@ static bool fDaemon;
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 void komodo_passport_iteration();
-uint64_t komodo_interestsum();
 int32_t komodo_longestchain();
 UniValue closeoffers(const UniValue& params, bool fHelp);
 

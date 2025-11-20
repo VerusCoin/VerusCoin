@@ -13,7 +13,6 @@
 #include "addrman.h"
 #include "alert.h"
 #include "arith_uint256.h"
-#include "importcoin.h"
 #include "chainparams.h"
 #include "checkpoints.h"
 #include "checkqueue.h"
@@ -1050,7 +1049,7 @@ unsigned int GetLegacySigOpCount(const CTransaction& tx)
 
 unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& inputs)
 {
-    if (tx.IsCoinBase() || tx.IsCoinImport())
+    if (tx.IsCoinBase())
         return 0;
 
     unsigned int nSigOps = 0;
@@ -2068,41 +2067,32 @@ bool AcceptToMemoryPoolInt(CTxMemPool& pool, CValidationState &state, const CTra
                 return state.Invalid(false, REJECT_DUPLICATE, "already have coins");
             }
 
-            if (tx.IsCoinImport())
+            // do all inputs exist?
+            // Note that this does not check for the presence of actual outputs (see the next check for that),
+            // and only helps with filling in pfMissingInputs (to determine missing vs spent).
+            BOOST_FOREACH(const CTxIn txin, tx.vin)
             {
-                // Inverse of normal case; if input exists, it's been spent
-                if (ExistsImportTombstone(tx, view))
-                    return state.Invalid(false, REJECT_DUPLICATE, "import tombstone exists");
-            }
-            else
-            {
-                // do all inputs exist?
-                // Note that this does not check for the presence of actual outputs (see the next check for that),
-                // and only helps with filling in pfMissingInputs (to determine missing vs spent).
-                BOOST_FOREACH(const CTxIn txin, tx.vin)
+                if (!view.HaveCoins(txin.prevout.hash))
                 {
-                    if (!view.HaveCoins(txin.prevout.hash))
+                    if (pfMissingInputs)
+                        *pfMissingInputs = true;
+                    if (LogAcceptCategory("showinputnotfoundtxes"))
                     {
-                        if (pfMissingInputs)
-                            *pfMissingInputs = true;
-                        if (LogAcceptCategory("showinputnotfoundtxes"))
-                        {
-                            printf("missing inputs\n");
-                            LogPrintf("missing inputs\n");
-                            UniValue jsonTx(UniValue::VOBJ);
-                            TxToUniv(tx, uint256(), jsonTx);
-                            printf("\n%s\n", jsonTx.write(1,2).c_str());
-                            LogPrintf("\n%s\n", jsonTx.write(1,2).c_str());
-                        }
-                        return state.DoS(0, error((std::string("AcceptToMemoryPool: tx inputs not found ") + txin.prevout.hash.GetHex()).c_str()),REJECT_INVALID, "bad-txns-inputs-missing");
+                        printf("missing inputs\n");
+                        LogPrintf("missing inputs\n");
+                        UniValue jsonTx(UniValue::VOBJ);
+                        TxToUniv(tx, uint256(), jsonTx);
+                        printf("\n%s\n", jsonTx.write(1,2).c_str());
+                        LogPrintf("\n%s\n", jsonTx.write(1,2).c_str());
                     }
+                    return state.DoS(0, error((std::string("AcceptToMemoryPool: tx inputs not found ") + txin.prevout.hash.GetHex()).c_str()),REJECT_INVALID, "bad-txns-inputs-missing");
                 }
+            }
 
-                // are the actual inputs available?
-                if (!view.HaveInputs(tx))
-                {
-                    return state.Invalid(error("AcceptToMemoryPool: inputs already spent"),REJECT_DUPLICATE, "bad-txns-inputs-spent");
-                }
+            // are the actual inputs available?
+            if (!view.HaveInputs(tx))
+            {
+                return state.Invalid(error("AcceptToMemoryPool: inputs already spent"),REJECT_DUPLICATE, "bad-txns-inputs-spent");
             }
 
             // are the joinsplit's requirements met?
@@ -2436,17 +2426,14 @@ bool AcceptToMemoryPoolInt(CTxMemPool& pool, CValidationState &state, const CTra
             mempool.PrioritiseReserveTransaction(txDesc);
         }
 
-        if (!tx.IsCoinImport())
-        {
-            // Add memory address index
-            if (fAddressIndex) {
-                pool.addAddressIndex(entry, view);
-            }
+        // Add memory address index
+        if (fAddressIndex) {
+            pool.addAddressIndex(entry, view);
+        }
 
-            // Add memory spent index
-            if (fSpentIndex) {
-                pool.addSpentIndex(entry, view);
-            }
+        // Add memory spent index
+        if (fSpentIndex) {
+            pool.addSpentIndex(entry, view);
         }
     }
 
@@ -3004,12 +2991,6 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
     inputs.SetNullifiers(tx, true);
 
     inputs.ModifyCoins(tx.GetHash())->FromTx(tx, nHeight); // add outputs
-
-    // Unorthodox state
-    if (tx.IsCoinImport()) {
-        // add a tombstone for the burnTx
-        AddImportTombstone(tx, inputs, nHeight);
-    }
 }
 
 void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight)
@@ -3286,12 +3267,6 @@ bool ContextualCheckInputs(const CTransaction& tx,
                 }
             }
         }
-    }
-
-    if (tx.IsCoinImport())
-    {
-        ServerTransactionSignatureChecker checker(&tx, 0, 0, false, txdata);
-        return VerifyCoinImport(tx.vin[0].scriptSig, checker, state);
     }
 
     return true;
@@ -3711,10 +3686,6 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                         CSpentIndexValue()));
                 }
             }
-        }
-        else if (tx.IsCoinImport())
-        {
-            RemoveImportTombstone(tx, view);
         }
     }
 

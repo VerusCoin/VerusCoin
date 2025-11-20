@@ -7,7 +7,6 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "checkpoints.h"
-#include "crosschain.h"
 #include "base58.h"
 #include "consensus/validation.h"
 #include "cc/eval.h"
@@ -440,25 +439,6 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
 
     LOCK(cs_main);
     return GetNetworkDifficulty();
-}
-
-bool myIsutxo_spentinmempool(uint256 txid,int32_t vout)
-{
-    //char *uint256_str(char *str,uint256); char str[65];
-    //LOCK(mempool.cs);
-    BOOST_FOREACH(const CTxMemPoolEntry &e,mempool.mapTx)
-    {
-        const CTransaction &tx = e.GetTx();
-        const uint256 &hash = tx.GetHash();
-        BOOST_FOREACH(const CTxIn &txin,tx.vin)
-        {
-            //fprintf(stderr,"%s/v%d ",uint256_str(str,txin.prevout.hash),txin.prevout.n);
-            if ( txin.prevout.n == vout && txin.prevout.hash == txid )
-                return(true);
-        }
-        //fprintf(stderr,"are vins for %s\n",uint256_str(str,hash));
-    }
-    return(false);
 }
 
 UniValue mempoolToJSON(bool fVerbose = false)
@@ -1210,68 +1190,9 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp)
 #define KOMODO_KVBINARY 2
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern int32_t ASSETCHAINS_LWMAPOS;
-uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uint64_t basevolume);
-int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *base,char *rel);
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 int32_t komodo_minerids(uint8_t *minerids,int32_t height,int32_t width);
-int32_t komodo_kvsearch(uint256 *refpubkeyp,int32_t current_height,uint32_t *flagsp,int32_t *heightp,uint8_t value[IGUANA_MAXSCRIPTSIZE],uint8_t *key,int32_t keylen);
-
-UniValue kvsearch(const UniValue& params, bool fHelp)
-{
-    UniValue ret(UniValue::VOBJ); uint32_t flags; uint8_t value[IGUANA_MAXSCRIPTSIZE*8],key[IGUANA_MAXSCRIPTSIZE*8]; int32_t duration,j,height,valuesize,keylen; uint256 refpubkey; static uint256 zeroes;
-    if (fHelp || params.size() != 1 )
-        throw runtime_error(
-            "kvsearch key\n"
-            "\nSearch for a key stored via the kvupdate command. This feature is only available for asset chains.\n"
-            "\nArguments:\n"
-            "1. key                      (string, required) search the chain for this key\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"coin\": \"xxxxx\",          (string) chain the key is stored on\n"
-            "  \"currentheight\": xxxxx,     (numeric) current height of the chain\n"
-            "  \"key\": \"xxxxx\",           (string) key\n"
-            "  \"keylen\": xxxxx,            (string) length of the key \n"
-            "  \"owner\": \"xxxxx\"          (string) hex string representing the owner of the key \n"
-            "  \"height\": xxxxx,            (numeric) height the key was stored at\n"
-            "  \"expiration\": xxxxx,        (numeric) height the key will expire\n"
-            "  \"flags\": x                  (numeric) 1 if the key was created with a password; 0 otherwise.\n"
-            "  \"value\": \"xxxxx\",         (string) stored value\n"
-            "  \"valuesize\": xxxxx          (string) amount of characters stored\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("kvsearch", "examplekey")
-            + HelpExampleRpc("kvsearch", "examplekey")
-        );
-    LOCK(cs_main);
-    if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
-    {
-        ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
-        ret.push_back(Pair("currentheight", (int64_t)chainActive.LastTip()->GetHeight()));
-        ret.push_back(Pair("key",params[0].get_str()));
-        ret.push_back(Pair("keylen",keylen));
-        if ( keylen < sizeof(key) )
-        {
-            memcpy(key,params[0].get_str().c_str(),keylen);
-            if ( (valuesize= komodo_kvsearch(&refpubkey,chainActive.LastTip()->GetHeight(),&flags,&height,value,key,keylen)) >= 0 )
-            {
-                std::string val; char *valuestr;
-                val.resize(valuesize);
-                valuestr = (char *)val.data();
-                memcpy(valuestr,value,valuesize);
-                if ( memcmp(&zeroes,&refpubkey,sizeof(refpubkey)) != 0 )
-                    ret.push_back(Pair("owner",refpubkey.GetHex()));
-                ret.push_back(Pair("height",height));
-                duration = ((flags >> 2) + 1) * KOMODO_KVDURATION;
-                ret.push_back(Pair("expiration", (int64_t)(height+duration)));
-                ret.push_back(Pair("flags",(int64_t)flags));
-                ret.push_back(Pair("value",val));
-                ret.push_back(Pair("valuesize",valuesize));
-            } else ret.push_back(Pair("error",(char *)"cant find key"));
-        } else ret.push_back(Pair("error",(char *)"key too big"));
-    } else ret.push_back(Pair("error",(char *)"null key"));
-    return ret;
-}
 
 UniValue minerids(const UniValue& params, bool fHelp)
 {
@@ -1384,115 +1305,6 @@ UniValue notaries(const UniValue& params, bool fHelp)
     ret.push_back(Pair("numnotaries", n));
     ret.push_back(Pair("height", height));
     ret.push_back(Pair("timestamp", (uint64_t)timestamp));
-    return ret;
-}
-
-int32_t komodo_pending_withdraws(char *opretstr);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
-extern char CURRENCIES[][8];
-
-UniValue paxpending(const UniValue& params, bool fHelp)
-{
-    UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR); char opretbuf[10000*2]; int32_t opretlen,baseid; uint64_t available,deposited,issued,withdrawn,approved,redeemed;
-    if ( fHelp || params.size() != 0 )
-        throw runtime_error("paxpending needs no args\n");
-    LOCK(cs_main);
-    if ( (opretlen= komodo_pending_withdraws(opretbuf)) > 0 )
-        ret.push_back(Pair("withdraws", opretbuf));
-    else ret.push_back(Pair("withdraws", (char *)""));
-    for (baseid=0; baseid<32; baseid++)
-    {
-        UniValue item(UniValue::VOBJ); UniValue obj(UniValue::VOBJ);
-        if ( pax_fiatstatus(&available,&deposited,&issued,&withdrawn,&approved,&redeemed,CURRENCIES[baseid]) == 0 )
-        {
-            if ( deposited != 0 || issued != 0 || withdrawn != 0 || approved != 0 || redeemed != 0 )
-            {
-                item.push_back(Pair("available", ValueFromAmount(available)));
-                item.push_back(Pair("deposited", ValueFromAmount(deposited)));
-                item.push_back(Pair("issued", ValueFromAmount(issued)));
-                item.push_back(Pair("withdrawn", ValueFromAmount(withdrawn)));
-                item.push_back(Pair("approved", ValueFromAmount(approved)));
-                item.push_back(Pair("redeemed", ValueFromAmount(redeemed)));
-                obj.push_back(Pair(CURRENCIES[baseid],item));
-                a.push_back(obj);
-            }
-        }
-    }
-    ret.push_back(Pair("fiatstatus", a));
-    return ret;
-}
-
-UniValue paxprice(const UniValue& params, bool fHelp)
-{
-    if ( fHelp || params.size() > 4 || params.size() < 2 )
-        throw runtime_error("paxprice \"base\" \"rel\" height\n");
-    LOCK(cs_main);
-    UniValue ret(UniValue::VOBJ); uint64_t basevolume=0,relvolume,seed;
-    std::string base = params[0].get_str();
-    std::string rel = params[1].get_str();
-    int32_t height;
-    if ( params.size() == 2 )
-        height = chainActive.LastTip()->GetHeight();
-    else height = atoi(params[2].get_str().c_str());
-    //if ( params.size() == 3 || (basevolume= COIN * atof(params[3].get_str().c_str())) == 0 )
-        basevolume = 100000;
-    relvolume = komodo_paxprice(&seed,height,(char *)base.c_str(),(char *)rel.c_str(),basevolume);
-    ret.push_back(Pair("base", base));
-    ret.push_back(Pair("rel", rel));
-    ret.push_back(Pair("height", height));
-    char seedstr[32];
-    sprintf(seedstr,"%llu",(long long)seed);
-    ret.push_back(Pair("seed", seedstr));
-    if ( height < 0 || height > chainActive.Height() )
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-    else
-    {
-        CBlockIndex *pblockindex = chainActive[height];
-        if ( pblockindex != 0 )
-            ret.push_back(Pair("timestamp", (int64_t)pblockindex->nTime));
-        if ( basevolume != 0 && relvolume != 0 )
-        {
-            ret.push_back(Pair("price",((double)relvolume / (double)basevolume)));
-            ret.push_back(Pair("invprice",((double)basevolume / (double)relvolume)));
-            ret.push_back(Pair("basevolume",ValueFromAmount(basevolume)));
-            ret.push_back(Pair("relvolume",ValueFromAmount(relvolume)));
-        } else ret.push_back(Pair("error", "overflow or error in one or more of parameters"));
-    }
-    return ret;
-}
-
-UniValue paxprices(const UniValue& params, bool fHelp)
-{
-    if ( fHelp || params.size() != 3 )
-        throw runtime_error("paxprices \"base\" \"rel\" maxsamples\n");
-    LOCK(cs_main);
-    UniValue ret(UniValue::VOBJ); uint64_t relvolume,prices[4096]; uint32_t i,n; int32_t heights[sizeof(prices)/sizeof(*prices)];
-    std::string base = params[0].get_str();
-    std::string rel = params[1].get_str();
-    int32_t maxsamples = atoi(params[2].get_str().c_str());
-    if ( maxsamples < 1 )
-        maxsamples = 1;
-    else if ( maxsamples > sizeof(heights)/sizeof(*heights) )
-        maxsamples = sizeof(heights)/sizeof(*heights);
-    ret.push_back(Pair("base", base));
-    ret.push_back(Pair("rel", rel));
-    n = komodo_paxprices(heights,prices,maxsamples,(char *)base.c_str(),(char *)rel.c_str());
-    UniValue a(UniValue::VARR);
-    for (i=0; i<n; i++)
-    {
-        UniValue item(UniValue::VOBJ);
-        if ( heights[i] < 0 || heights[i] > chainActive.Height() )
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-        else
-        {
-            CBlockIndex *pblockindex = chainActive[heights[i]];
-
-            item.push_back(Pair("t", (int64_t)pblockindex->nTime));
-            item.push_back(Pair("p", (double)prices[i] / COIN));
-            a.push_back(item);
-        }
-    }
-    ret.push_back(Pair("array", a));
     return ret;
 }
 

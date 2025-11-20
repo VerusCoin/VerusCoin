@@ -23,8 +23,6 @@
 #include "main.h"
 #include "chain.h"
 #include "core_io.h"
-#include "crosschain.h"
-
 
 Eval* EVAL_TEST = 0;
 struct CCcontract_info CCinfos[0x100];
@@ -127,14 +125,6 @@ bool Eval::Dispatch(const CC *cond, const CTransaction &txTo, unsigned int nIn, 
     return Invalid("invalid smart transaction code");
 }
 
-
-bool Eval::GetSpendsConfirmed(uint256 hash, std::vector<CTransaction> &spends) const
-{
-    // NOT IMPLEMENTED
-    return false;
-}
-
-
 bool Eval::GetTxUnconfirmed(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock) const
 {
     // there is a LOCK(cs_main) in the normal GetTransaction(), which leads to deadlocks
@@ -152,12 +142,6 @@ bool Eval::GetTxConfirmed(const uint256 &hash, CTransaction &txOut, CBlockIndex 
     if (hashBlock.IsNull() || !GetBlock(hashBlock, block))
         return false;
     return true;
-}
-
-
-unsigned int Eval::GetCurrentHeight() const
-{
-    return chainActive.Height();
 }
 
 bool Eval::GetBlock(uint256 hash, CBlockIndex& blockIdx) const
@@ -218,44 +202,6 @@ bool Eval::CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t t
     return true;
 }
 
-
-/*
- * Get MoM from a notarisation tx hash (on KMD)
- */
-bool Eval::GetNotarisationData(const uint256 notaryHash, NotarisationData &data) const
-{
-    CTransaction notarisationTx;
-    CBlockIndex block;
-    if (!GetTxConfirmed(notaryHash, notarisationTx, block)) return false;
-    if (!CheckNotaryInputs(notarisationTx, block.GetHeight(), block.nTime)) return false;
-    if (!ParseNotarisationOpReturn(notarisationTx, data)) return false;
-    return true;
-}
-
-/*
- * Get MoMoM corresponding to a notarisation tx hash (on assetchain)
- */
-bool Eval::GetProofRoot(uint256 kmdNotarisationHash, uint256 &momom) const
-{
-    std::pair<uint256,NotarisationData> out;
-    if (!GetNextBacknotarisation(kmdNotarisationHash, out)) return false;
-    momom = out.second.MoMoM;
-    return true;
-}
-
-
-uint32_t Eval::GetAssetchainsCC() const
-{
-    return ASSETCHAINS_CC;
-}
-
-
-std::string Eval::GetAssetchainsSymbol() const
-{
-    return std::string(ASSETCHAINS_SYMBOL);
-}
-
-
 /*
  * Notarisation data, ie, OP_RETURN payload in notarisation transactions
  */
@@ -300,12 +246,4 @@ uint256 SafeCheckMerkleBranch(uint256 hash, const std::vector<uint256>& vMerkleB
         nIndex >>= 1;
     }
     return hash;
-}
-
-
-uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves)
-{
-    bool fMutated;
-    std::vector<uint256> vMerkleTree;
-    return BuildMerkleTree(&fMutated, vLeaves, vMerkleTree);
 }

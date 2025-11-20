@@ -702,7 +702,6 @@ public:
 
     bool IsMint() const
     {
-        // return IsCoinImport() || IsCoinBase();
         return IsCoinBase();
     }
 
@@ -712,12 +711,6 @@ public:
     }
 
     int64_t UnlockTime(uint32_t voutNum) const;
-
-    bool IsCoinImport() const
-    {
-        // return (vin.size() == 1 && vin[0].prevout.n == 10e8);
-        return false; // we don't support "importing" coins this way
-    }
 
     friend bool operator==(const CTransaction& a, const CTransaction& b)
     {

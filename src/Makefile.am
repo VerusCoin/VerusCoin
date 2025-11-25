@@ -72,9 +72,6 @@ endif
 if BUILD_BITCOIN_LIBS
 LIBZCASH_CONSENSUS=libzcashconsensus.la
 endif
-if ENABLE_WALLET
-LIBBITCOIN_WALLET=libbitcoin_wallet.a
-endif
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="-O3 -march=$(PLATFORM_VARIANT) -g "
@@ -303,34 +300,14 @@ libbitcoin_server_a_SOURCES = \
   asyncrpcqueue.cpp \
   bloom.cpp \
   cc/eval.cpp \
-  cc/import.cpp \
-  cc/CCassetsCore.cpp \
   cc/CCcustom.cpp \
-  cc/CCtx.cpp \
   cc/CCutils.cpp \
   cc/StakeGuard.cpp \
   cc/StakeGuard.h \
-  cc/assets.cpp \
-  cc/faucet.cpp \
-  cc/rewards.cpp \
-  cc/dice.cpp \
-  cc/lotto.cpp \
-  cc/fsm.cpp \
-  cc/MofN.cpp \
-  cc/oracles.cpp \
-  cc/prices.cpp \
-  cc/pegs.cpp \
-  cc/triggers.cpp \
-  cc/payments.cpp \
-  cc/gateways.cpp \
-  cc/channels.cpp \
-  cc/auction.cpp \
-  cc/betprotocol.cpp \
   chain.cpp \
   cheatcatcher.h \
   cheatcatcher.cpp \
   checkpoints.cpp \
-  crosschain.cpp \
   crypto/haraka.h \
   crypto/haraka_portable.h \
   crypto/verus_clhash.h \
@@ -358,7 +335,6 @@ libbitcoin_server_a_SOURCES = \
   primitives/solutiondata.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
-  rpc/crosschain.cpp \
   rpc/mining.cpp \
   rpc/pbaasrpc.cpp \
   rpc/misc.cpp \
@@ -414,8 +390,6 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/paymentdisclosuredb.cpp \
   wallet/rpcdisclosure.cpp \
   wallet/rpcdump.cpp \
-  cc/CCassetstx.cpp \
-  cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
   wallet/wallet.cpp \
   wallet/wallet_ismine.cpp \
@@ -513,7 +487,6 @@ libbitcoin_common_a_SOURCES = \
   crypto/verus_hash.h \
   crypto/verus_hash.cpp \
   hash.cpp \
-  importcoin.cpp \
   key.cpp \
   key_io.cpp \
   keystore.cpp \

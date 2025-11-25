@@ -921,17 +921,6 @@ bool CScript::MayAcceptCryptoCondition(int evalCode) const
     return out;
 }
 
-bool CScript::IsCoinImport() const
-{
-    const_iterator pc = this->begin();
-    vector<unsigned char> data;
-    opcodetype opcode;
-    if (this->GetOp(pc, opcode, data))
-        if (opcode > OP_0 && opcode <= OP_PUSHDATA4)
-            return data.begin()[0] == EVAL_IMPORTCOIN;
-    return false;
-}
-
 bool CScript::IsPushOnly() const
 {
     const_iterator pc = begin();

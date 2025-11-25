@@ -110,34 +110,13 @@ public:
     virtual bool Dispatch(const CC *cond, const CTransaction &tx, unsigned int nIn, bool fulfilled);
 
     /*
-     * Dispute a payout using a VM
-     */
-    bool DisputePayout(AppVM &vm, std::vector<uint8_t> params, const CTransaction &disputeTx, unsigned int nIn);
-
-    /*
-     * Test an ImportPayout CC Eval condition
-     */
-    bool ImportPayout(std::vector<uint8_t> params, const CTransaction &importTx, unsigned int nIn);
-
-    /*
-     * Import coin from another chain with same symbol
-     */
-    bool ImportCoin(std::vector<uint8_t> params, const CTransaction &importTx, unsigned int nIn);
-
-    /*
      * IO functions
      */
     virtual bool GetTxUnconfirmed(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock) const;
     virtual bool GetTxConfirmed(const uint256 &hash, CTransaction &txOut, CBlockIndex &block) const;
-    virtual unsigned int GetCurrentHeight() const;
-    virtual bool GetSpendsConfirmed(uint256 hash, std::vector<CTransaction> &spends) const;
     virtual bool GetBlock(uint256 hash, CBlockIndex& blockIdx) const;
     virtual int32_t GetNotaries(uint8_t pubkeys[64][33], int32_t height, uint32_t timestamp) const;
-    virtual bool GetNotarisationData(uint256 notarisationHash, NotarisationData &data) const;
-    virtual bool GetProofRoot(uint256 kmdNotarisationHash, uint256 &momom) const;
     virtual bool CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t timestamp) const;
-    virtual uint32_t GetAssetchainsCC() const;
-    virtual std::string GetAssetchainsSymbol() const;
 };
 
 
@@ -312,7 +291,6 @@ typedef std::pair<uint256,MerkleBranch> TxProof;
 
 bool DefaultCCContextualPreCheck(const CTransaction &tx, int32_t outNum, CValidationState &state, uint32_t height);
 bool EvalNoneContextualPreCheck(const CTransaction &tx, int32_t outNum, CValidationState &state, uint32_t height);
-uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves);
 struct CCcontract_info *CCinit(struct CCcontract_info *cp,uint8_t evalcode);
 bool ProcessCC(struct CCcontract_info *cp,Eval* eval, std::vector<uint8_t> paramsNull, const CTransaction &tx, unsigned int nIn, bool fulfilled);
 

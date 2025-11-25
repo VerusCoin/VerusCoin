@@ -6,12 +6,7 @@ bin_PROGRAMS += komodo-test
 komodo_test_SOURCES = \
 	test-komodo/main.cpp \
 	test-komodo/testutils.cpp \
-	test-komodo/test_cryptoconditions.cpp \
-	test-komodo/test_coinimport.cpp \
-	test-komodo/test_eval_bet.cpp \
-	test-komodo/test_eval_notarisation.cpp \
-	test-komodo/test_crosschain.cpp \
-	test-komodo/test_parse_notarisation.cpp
+	test-komodo/test_cryptoconditions.cpp
 
 komodo_test_CPPFLAGS = $(verusd_CPPFLAGS)
 

@@ -12838,7 +12838,7 @@ UniValue getcurrencystate(const UniValue& params, bool fHelp)
         }
         UniValue entry(UniValue::VOBJ);
         entry.push_back(Pair("height", i));
-        entry.push_back(Pair("blocktime", importIt->first.second <= chainActive.Height() ? (uint64_t)(chainActive[importIt->first.second]->nTime) : (uint64_t)(chainActive.LastTip()->nTime)));
+        entry.push_back(Pair("blocktime", i <= chainActive.Height() ? (uint64_t)(chainActive[i]->nTime) : (uint64_t)(chainActive.LastTip()->nTime)));
         entry.push_back(Pair("currencystate", currencyState.ToUniValue()));
 
         if (pairVolumePrice.size())
@@ -15578,9 +15578,10 @@ UniValue updateidentity(const UniValue& params, bool fHelp)
             "\nArguments\n"
             "       \"jsonidentity\"                    (obj,    required) new definition of the identity\n"
             "       \"returntx\"                        (bool,   optional) defaults to false and transaction is sent, if true, transaction is signed by this wallet and returned\n"
-            "       \"tokenupdate\"                     (bool,   optional) defaults to false, if true, the tokenized ID control token, if one exists, will be used to update\n"
-            "                                                              which enables changing the revocation or recovery IDs, even if the wallet holding the token does not\n"
-            "                                                              control either.\n"
+            "       \"tokenupdate\"                     (bool,   optional) defaults to false, if true, the tokenized ID control token, if one exists, will be used to provide\n"
+            "                                                              authority for update. This provides revoke and recovery for update, but does not give primary authority\n"
+            "                                                              enabling revoke, recover, and changing of the revocation or recovery IDs, even if the wallet holding\n"
+            "                                                              the token does not control any other authority besides the token itself.\n"
             "       \"feeoffer\"                        (value,  optional) non-standard fee amount to pay for the transaction\n"
             "       \"sourceoffunds\"                   (string, optional) transparent or private address to source all funds for fees to preserve privacy of the identity\n"
 

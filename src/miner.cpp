@@ -12,7 +12,6 @@
 #include "amount.h"
 #include "chainparams.h"
 #include "cc/StakeGuard.h"
-#include "importcoin.h"
 #include "consensus/consensus.h"
 #include "consensus/upgrades.h"
 #include "consensus/validation.h"

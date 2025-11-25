@@ -82,8 +82,8 @@ bool CIdentity::IsInvalidMutation(const CIdentity &newIdentity, uint32_t height,
         ((newIdentity.flags & ~(FLAG_REVOKED + FLAG_LOCKED)) && newIdentity.nVersion < VERSION_PBAAS) ||
         ((newIdentity.flags & ~(FLAG_REVOKED + FLAG_ACTIVECURRENCY + FLAG_LOCKED + FLAG_TOKENIZED_CONTROL)) && (newIdentity.nVersion >= VERSION_PBAAS)) ||
         (IsLocked(height) && (!newIdentity.IsRevoked() && !newIdentity.IsLocked(height))) ||
-        (HasActiveCurrency() && !HasActiveCurrency()) ||
-        (HasTokenizedControl() && !HasTokenizedControl()) ||
+        (HasActiveCurrency() && !newIdentity.HasActiveCurrency()) ||
+        (HasTokenizedControl() && !newIdentity.HasTokenizedControl()) ||
         newIdentity.nVersion < VERSION_FIRSTVALID ||
         newIdentity.nVersion > VERSION_LASTVALID)
     {

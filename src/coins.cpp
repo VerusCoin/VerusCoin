@@ -9,7 +9,6 @@
 #include "version.h"
 #include "policy/fees.h"
 #include "komodo_defs.h"
-#include "importcoin.h"
 #include "pbaas/notarization.h"
 #include "pbaas/reserves.h"
 
@@ -594,8 +593,6 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight, int64_t *interestp, const C
     CAmount value,nResult = 0;
     if ( interestp != 0 )
         *interestp = 0;
-    if ( tx.IsCoinImport() )
-        return GetCoinImportValue(tx);
     if ( tx.IsCoinBase() != 0 )
         return 0;
     for (unsigned int i = 0; i < tx.vin.size(); i++)
@@ -745,7 +742,7 @@ double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight, const C
     // use the maximum priority for all (partially or fully) shielded transactions.
     // (Note that coinbase transactions cannot contain JoinSplits, or Sapling shielded Spends or Outputs.)
 
-    if (tx.vJoinSplit.size() > 0 || tx.vShieldedSpend.size() > 0 || tx.vShieldedOutput.size() > 0 || tx.IsCoinImport()) {
+    if (tx.vJoinSplit.size() > 0 || tx.vShieldedSpend.size() > 0 || tx.vShieldedOutput.size() > 0 ) {
         return MAX_PRIORITY;
     }
 

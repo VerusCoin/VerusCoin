@@ -10618,6 +10618,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
             auto opRetHex = TrimSpaces(uni_get_str(find_value(uniOutputs[i], "opret")));
             CAmount sourceAmount = AmountFromValue(find_value(uniOutputs[i], "amount"));
             auto destStr = TrimSpaces(uni_get_str(find_value(uniOutputs[i], "address")), true, "\\/*?\"<>|");
+            auto vdxfTag = TrimSpaces(uni_get_str(find_value(uniOutputs[i], "vdxftag")), true, "\\/*?\"<>|");
             auto exportId = uni_get_bool(find_value(uniOutputs[i], "exportid"));
             auto exportCurrency = uni_get_bool(find_value(uniOutputs[i], "exportcurrency"));
             auto refundToStr = TrimSpaces(uni_get_str(find_value(uniOutputs[i], "refundto")));
@@ -10685,6 +10686,21 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                 continue;
             }
 
+            std::vector<CTxDestination> *pIndexDests = nullptr;
+            std::vector<CTxDestination> indexDests;
+
+            // only x-addresses can be vdxf tags
+            if (!vdxfTag.empty())
+            {
+                CTxDestination vdxfTagDest = DecodeDestination(vdxfTag);
+                if (vdxfTagDest.which() != COptCCParams::ADDRTYPE_INDEX)
+                {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "If vdxfTag is specified, it must be an \"X\" address, also called an indexId (see getvdxfid)");
+                }
+                indexDests.push_back(vdxfTagDest);
+                pIndexDests = &indexDests;
+            }
+
             CCurrencyDefinition sourceCurrencyDef;
             uint160 sourceCurrencyID;
             if (currencyStr != "")
@@ -10724,6 +10740,11 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
             // re-encode destination, in case it is specified as the private address of an ID
             if (hasZDest)
             {
+                if (pIndexDests)
+                {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot add vdxfTag to z-address destination");
+                }
+
                 // no duplicate z-address destinations
                 if (zaddrDestSet.count(zaddressDest))
                 {
@@ -11696,7 +11717,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                         std::vector<CTxDestination> dests = std::vector<CTxDestination>({pk.GetID()});
 
                         oneOutput.nAmount = sourceCurrencyID == thisChainID ? sourceAmount + rt.CalculateTransferFee() : rt.CalculateTransferFee();
-                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                     }
                     // through a converter before or after conversion for actual conversion and/or fee conversion
                     else if (isConversion || (destSystemID != exportToCurrencyID && !convertToCurrencyID.IsNull()))
@@ -11970,7 +11991,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                         std::vector<CTxDestination> dests = std::vector<CTxDestination>({pk.GetID()});
 
                         oneOutput.nAmount = rt.TotalCurrencyOut().valueMap[ASSETCHAINS_CHAINID];
-                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                     }
                     else // direct to another system paying with acceptable fee currency
                     {
@@ -12057,7 +12078,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                         std::vector<CTxDestination> dests = std::vector<CTxDestination>({pk.GetID()});
 
                         oneOutput.nAmount = rt.TotalCurrencyOut().valueMap[ASSETCHAINS_CHAINID];
-                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                     }
                 }
                 else if (exportCurrency)
@@ -12106,7 +12127,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                                                                dest);
                         rt.nFees = rt.CalculateTransferFee();
                         oneOutput.nAmount = rt.TotalCurrencyOut().valueMap[ASSETCHAINS_CHAINID];
-                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                     }
                     else if (!preConvert && (mintNew || burnCurrency || toFractional || fromFractional))
                     {
@@ -12145,7 +12166,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                                                                    DestinationToTransferDestination(destination));
                             rt.nFees = rt.CalculateTransferFee();
                             oneOutput.nAmount = rt.TotalCurrencyOut().valueMap[ASSETCHAINS_CHAINID];
-                            oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                            oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                         }
                         else
                         {
@@ -12240,7 +12261,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                             std::vector<CTxDestination> dests = std::vector<CTxDestination>({pk.GetID()});
 
                             oneOutput.nAmount = rt.TotalCurrencyOut().valueMap[ASSETCHAINS_CHAINID];
-                            oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt));
+                            oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CReserveTransfer>(EVAL_RESERVE_TRANSFER, dests, 1, &rt), pIndexDests);
                         }
                     }
                     else
@@ -12263,7 +12284,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                         std::vector<CTxDestination> dests = std::vector<CTxDestination>({destination});
                         CTokenOutput to(sourceCurrencyID, sourceAmount);
 
-                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CTokenOutput>(EVAL_RESERVE_OUTPUT, dests, 1, &to));
+                        oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CTokenOutput>(EVAL_RESERVE_OUTPUT, dests, 1, &to), pIndexDests);
                     }
                 }
                 if (!oneOutput.scriptPubKey.size())

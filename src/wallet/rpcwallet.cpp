@@ -4813,13 +4813,6 @@ UniValue listunspent(const UniValue& params, bool fHelp)
     return results;
 }
 
-uint64_t komodo_interestsum()
-{
-    // FIXME Alright - remove this
-    return(0);
-}
-
-
 UniValue z_listunspent(const UniValue& params, bool fHelp)
 {
     if (!EnsureWalletIsAvailable(fHelp))

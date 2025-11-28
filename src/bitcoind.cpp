@@ -63,7 +63,6 @@ void WaitForShutdown(boost::thread_group* threadGroup)
         }
         else
         {
-            // komodo_interestsum();
             komodo_longestchain();
             MilliSleep(20000);
         }

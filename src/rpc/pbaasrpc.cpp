@@ -10598,7 +10598,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
 
     bool hasOpRet = false;
 
-    static std::set<std::string> paramSet({"currency", "amount", "convertto", "exportto", "feecurrency", "via", "address", "exportid", "exportcurrency", "refundto", "memo", "preconvert",  "burn", "burnweight", "mintnew", "addconversionfees", "opret", "data"});
+    static std::set<std::string> paramSet({"currency", "amount", "convertto", "exportto", "feecurrency", "via", "address", "exportid", "exportcurrency", "refundto", "memo", "preconvert",  "burn", "burnweight", "mintnew", "addconversionfees", "opret", "data", "vdxftag"});
 
     //printf("%s: params[1]: %s\n", __func__, params[1].write(1,2).c_str());
 

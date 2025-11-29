@@ -2299,7 +2299,10 @@ void ScriptPubKeyToUniv(const CScript& scriptPubKey, UniValue& out, bool fInclud
 
         UniValue a(UniValue::VARR);
         for (const CTxDestination& addr : addresses) {
-            a.push_back(EncodeDestination(addr));
+            if (addr.which() != COptCCParams::ADDRTYPE_INDEX)
+            {
+                a.push_back(EncodeDestination(addr));
+            }
         }
         out.push_back(Pair("addresses", a));
     }

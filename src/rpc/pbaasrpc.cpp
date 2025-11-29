@@ -12274,8 +12274,16 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                 {
                     if (sourceCurrencyID == thisChainID)
                     {
-                        oneOutput.nAmount = sourceAmount;
-                        oneOutput.scriptPubKey = GetScriptForDestination(destination);
+                        if (pIndexDests)
+                        {
+                            std::vector<CTxDestination> dests = std::vector<CTxDestination>({destination});
+                            oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CTokenOutput>(EVAL_NONE, dests, 1, nullptr), pIndexDests);
+                        }
+                        else
+                        {
+                            oneOutput.nAmount = sourceAmount;
+                            oneOutput.scriptPubKey = GetScriptForDestination(destination);
+                        }
                     }
                     else
                     {

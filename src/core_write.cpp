@@ -1977,11 +1977,10 @@ void ScriptPubKeyToUniv(const CScript& scriptPubKey, UniValue& out, bool fInclud
         {
             case EVAL_NONE:
             {
-                COptCCParams masterForKeys;
-                if (p.vData.size() && !p.vData[0].size() &&
-                    (p.vData.size() == 1 || (masterForKeys = COptCCParams(p.vData.back())).IsValid()))
+                if (p.vData.size())
                 {
-                    if (masterForKeys.IsValid())
+                    COptCCParams masterForKeys;
+                    if (p.vData.size() > 1 && (masterForKeys = COptCCParams(p.vData.back())).IsValid())
                     {
                         for (const auto &oneKey : masterForKeys.vKeys)
                         {

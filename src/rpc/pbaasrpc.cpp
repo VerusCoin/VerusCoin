@@ -12276,6 +12276,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                     {
                         if (pIndexDests)
                         {
+                            oneOutput.nAmount = sourceAmount;
                             std::vector<CTxDestination> dests = std::vector<CTxDestination>({destination});
                             oneOutput.scriptPubKey = MakeMofNCCScript(CConditionObj<CTokenOutput>(EVAL_NONE, dests, 1, nullptr), pIndexDests);
                         }

@@ -888,6 +888,7 @@ UniValue z_getencryptionaddress(const UniValue& params, bool fHelp)
             "\nResult:\n"
             "{\n"
             "  \"extendedviewingkey\" : \"evk\",            (string) \"sapling\" extended viewing key\n"
+            "  \"incomingviewingkey\" : \"ivk\",            (string) \"sapling\" hex encoded incoming viewing key\n"
             "  \"address\" : \"encryptionaddress\",         (string) The encryption address derived\n"
             "  \"extendedspendingkey\" : \"encryptionaddress\", (string) Spending key for the address, if requested\n"
             "}\n"

@@ -7632,7 +7632,7 @@ UniValue makeoffer(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4)
     {
         throw runtime_error(
-            "makeoffer fromaddress '{\"changeaddress\":\"transparentoriaddress\", \"expiryheight\":blockheight, \"offer\":{\"currency\":\"anycurrency\", \"amount\":...} | {\"identity\":\"idnameoriaddress\",...}', \"for\":{\"address\":..., \"currency\":\"anycurrency\", \"amount\":...} | {\"name\":\"identityforswap\",\"parent\":\"parentid\",\"primaryaddresses\":[\"R-address(s)\"],\"minimumsignatures\":1,...}}' (returntx) (feeamount)\n"
+            "makeoffer fromaddress '{\"changeaddress\":\"transparentoriaddress\", \"expiryheight\":blockheight, \"offer\":{\"currency\":\"anycurrency\", \"amount\":...} | {\"identity\":\"idnameoriaddress\",...}, \"for\":{\"address\":..., \"currency\":\"anycurrency\", \"amount\":...} | {\"name\":\"identityforswap\",\"parent\":\"parentid\",\"primaryaddresses\":[\"R-address(s)\"],\"minimumsignatures\":1,...}}' (returntx) (feeamount)\n"
             "\nThis sends a transaction which provides a completely decentralized, fully on-chain an atomic swap offer for\n"
             "\"decentralized swapping of any blockchain asset, including any/multi currencies, NFTs, identities, contractual\n"
             "\"agreements and rights transfers, or to be used as bids for an on-chain auction of any blockchain asset(s).\n"

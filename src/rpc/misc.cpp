@@ -2339,17 +2339,17 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
     CCurrencyValueMap reserveBalance;
     CCurrencyValueMap reserveReceived;
 
-    // Calculate native currency balance
-    for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
-        if (it->second > 0) {
-            received += it->second;
-        }
-        balance += it->second;
-    }
-
-    // Get reserve currency balances from the fast index for PBaaS chains
+    // Get reserve currency balances
     if (fCurrencyIndex && CConstVerusSolutionVector::GetVersionByHeight(chainActive.Height()) >= CActivationHeight::ACTIVATE_PBAAS)
     {
+        // Fast path: use the reserve balance index
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
+        }
+
         for (const auto& addr : addresses) {
             std::map<uint160, CAddressReserveBalanceValue> reserveBalances;
             if (pblocktree->ReadAddressReserveBalance(addr.first, addr.second, reserveBalances))
@@ -2366,6 +2366,48 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
                     }
                 }
             }
+        }
+    }
+    else if (CConstVerusSolutionVector::GetVersionByHeight(chainActive.Height()) >= CActivationHeight::ACTIVATE_PBAAS)
+    {
+        // Slow path: calculate reserve balances by scanning transactions
+        CTransaction curTx;
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            uint256 blockHash;
+            if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
+            {
+                if (it->first.spending) {
+                    CTransaction priorOutTx;
+                    if (myGetTransaction(curTx.vin[it->first.index].prevout.hash, priorOutTx, blockHash))
+                    {
+                        reserveBalance -= priorOutTx.vout[curTx.vin[it->first.index].prevout.n].ReserveOutValue();
+                    }
+                    else
+                    {
+                        throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to retrieve data for reserve output value");
+                    }
+                }
+                else
+                {
+                    reserveBalance += curTx.vout[it->first.index].ReserveOutValue();
+                    reserveReceived += curTx.vout[it->first.index].ReserveOutValue();
+                }
+            }
+
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
+        }
+    }
+    else
+    {
+        // Pre-PBaaS: only calculate native currency balance
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
         }
     }
 

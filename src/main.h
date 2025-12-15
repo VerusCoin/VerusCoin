@@ -186,6 +186,9 @@ extern bool fSpentIndex;
 // Maintain a full timestamp index, used to query for blocks within a time range
 extern bool fTimestampIndex;
 
+// Maintain a currency balance index for fast reserve currency balance lookups (PBaaS)
+extern bool fCurrencyIndex;
+
 // END insightexplorer
 
 extern bool fIsBareMultisigStd;

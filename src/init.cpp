@@ -358,6 +358,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-checkblocks=<n>", strprintf(_("How many blocks to check at startup (default: %u, 0 = all)"), 288));
     strUsage += HelpMessageOpt("-checklevel=<n>", strprintf(_("How thorough the block verification of -checkblocks is (0-4, default: %u)"), 3));
     strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), "komodo.conf"));
+    strUsage += HelpMessageOpt("-currencyindex", _("Maintain a currency balance index for fast reserve currency lookups (default: 0)"));
     if (mode == HMM_BITCOIND)
     {
 #if !defined(WIN32)
@@ -1816,6 +1817,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             pblocktree->WriteFlag("timestampindex", fTimeStampIndex);
             fprintf(stderr,"set timestampindex, will reindex. sorry will take a while.\n");
+            fReindex = true;
+        }
+
+        fCurrencyIndex = GetBoolArg("-currencyindex", false);
+        pblocktree->ReadFlag("currencyindex", checkval);
+        if ( checkval != fCurrencyIndex )
+        {
+            pblocktree->WriteFlag("currencyindex", fCurrencyIndex);
+            fprintf(stderr,"set currencyindex, will reindex. sorry will take a while.\n");
             fReindex = true;
         }
     }

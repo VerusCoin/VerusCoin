@@ -2333,40 +2333,40 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
         }
     }
 
-    CTransaction curTx;
-
     CAmount balance = 0;
     CAmount received = 0;
 
     CCurrencyValueMap reserveBalance;
     CCurrencyValueMap reserveReceived;
 
+    // Calculate native currency balance
     for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
-        uint256 blockHash;
-        if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
-        {
-            if (it->first.spending) {
-                CTransaction priorOutTx;
-                if (myGetTransaction(curTx.vin[it->first.index].prevout.hash, priorOutTx, blockHash))
-                {
-                    reserveBalance -= priorOutTx.vout[curTx.vin[it->first.index].prevout.n].ReserveOutValue();
-                }
-                else
-                {
-                    throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to retrieve data for reserve output value");
-                }
-            }
-            else
-            {
-                reserveBalance += curTx.vout[it->first.index].ReserveOutValue();
-                reserveReceived += curTx.vout[it->first.index].ReserveOutValue();
-            }
-        }
-
         if (it->second > 0) {
             received += it->second;
         }
         balance += it->second;
+    }
+
+    // Get reserve currency balances from the fast index for PBaaS chains
+    if (fCurrencyIndex && CConstVerusSolutionVector::GetVersionByHeight(chainActive.Height()) >= CActivationHeight::ACTIVATE_PBAAS)
+    {
+        for (const auto& addr : addresses) {
+            std::map<uint160, CAddressReserveBalanceValue> reserveBalances;
+            if (pblocktree->ReadAddressReserveBalance(addr.first, addr.second, reserveBalances))
+            {
+                for (const auto& balEntry : reserveBalances)
+                {
+                    if (balEntry.second.balance != 0)
+                    {
+                        reserveBalance.valueMap[balEntry.first] += balEntry.second.balance;
+                    }
+                    if (balEntry.second.received != 0)
+                    {
+                        reserveReceived.valueMap[balEntry.first] += balEntry.second.received;
+                    }
+                }
+            }
+        }
     }
 
     UniValue result(UniValue::VOBJ);

@@ -17096,6 +17096,7 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
             "    \"txproofs\"                           (bool, optional) default=false, if true, returns proof of ID\n"
             "    \"txproofheight\"                      (number, optional) default=\"height\", height from which to generate a proof\n"
             "    \"vdxfkey\"                            (vdxf key, optional) default=null, more selective search for specific content in ID\n"
+            "                                                               The key will be automatically bound to the identity and multimap key.\n"
             "    \"keepdeleted\"                        (bool, optional) default=false, if true, return deleted items as well\n"
 
             "\nResult:\n"
@@ -17149,7 +17150,30 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
         txProofHeight = lteHeight;
     }
 
-    uint160 vdxfKey = params.size() > 5 ? GetDestinationID(DecodeDestination(uni_get_str(params[5]))) : uint160();
+    uint160 vdxfKey;
+    if (params.size() > 5)
+    {
+        CTxDestination vdxfDest = DecodeDestination(uni_get_str(params[5]));
+        if (vdxfDest.which() != COptCCParams::ADDRTYPE_ID)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "vdxfkey parameter must be a valid i-address: \"" + uni_get_str(params[5]) + "\"");
+        }
+        vdxfKey = GetDestinationID(vdxfDest);
+    }
+    
+    // If a vdxfKey is provided, automatically transform it to the proper search key
+    // by binding it to the identity ID first, then binding that result with "vrsc::identity.multimapkey"
+    uint160 searchKey = vdxfKey;
+    if (!vdxfKey.IsNull())
+    {
+        uint160 identityID = GetDestinationID(idID);
+        // Step 1: Bind the original key to the identity ID
+        uint160 intermediateKey = CCrossChainRPCData::GetConditionID(vdxfKey, identityID);
+        
+        // Step 2: Bind the intermediate key with the multimap key
+        searchKey = CCrossChainRPCData::GetConditionID(CVDXF_Data::MultiMapKey(), intermediateKey);
+    }
+    
     bool keepDeleted = params.size() > 6 ? uni_get_bool(params[6]) : false;
 
     CTxIn idTxIn;
@@ -17213,7 +17237,7 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
                                                                    useMempool,
                                                                    txProof,
                                                                    txProofHeight,
-                                                                   vdxfKey,
+                                                                   searchKey,
                                                                    keepDeleted);
 
         // put the aggregated content map in the ID before rendering

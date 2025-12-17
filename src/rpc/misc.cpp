@@ -2159,6 +2159,7 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             "  \"chaininfo\" (boolean) Include chain info in results, only applies if start and end specified\n"
             "  \"friendlynames\" (boolean) Include additional array of friendly names keyed by currency i-addresses\n"
             "  \"verbosity\" (number) (default == 0), if 1, include output information for spends, including all reserve amounts and destinations\n"
+            "  \"vdxftag\" (string) Optional X-address (indexId) to filter outputs by VDXF tag\n"
             "}\n"
             "\nResult:\n"
             "[\n"
@@ -2179,6 +2180,21 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
     bool includeChainInfo = uni_get_bool(find_value(params[0].get_obj(), "chaininfo"));
     bool friendlyNames = uni_get_bool(find_value(params[0].get_obj(), "friendlynames"));
     int verbosity = uni_get_bool(find_value(params[0].get_obj(), "verbosity"));
+    std::string vdxfTagStr = uni_get_str(find_value(params[0].get_obj(), "vdxftag"));
+
+    // Parse and validate vdxftag if provided
+    uint160 filterTagID;
+    bool hasTagFilter = false;
+    if (!vdxfTagStr.empty())
+    {
+        CTxDestination vdxfTagDest = DecodeDestination(vdxfTagStr);
+        if (vdxfTagDest.which() != COptCCParams::ADDRTYPE_INDEX)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "If vdxftag is specified, it must be an \"x\" address");
+        }
+        filterTagID = GetDestinationID(vdxfTagDest);
+        hasTagFilter = true;
+    }
 
     UniValue startValue = find_value(params[0].get_obj(), "start");
     UniValue endValue = find_value(params[0].get_obj(), "end");
@@ -2227,6 +2243,60 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
         CTransaction curTx;
 
         for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            // If tag filtering is enabled, check if this output has the matching tag
+            bool outputHasTag = false;
+            if (hasTagFilter)
+            {
+                // VDXF tags are only on outputs, not inputs, so skip spending entries
+                if (it->first.spending)
+                {
+                    continue;
+                }
+                uint256 blockHash;
+                if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
+                {
+                    // Check if output at this index has the requested VDXF tag
+                    if (it->first.index < curTx.vout.size())
+                    {
+                        const CScript &scriptPubKey = curTx.vout[it->first.index].scriptPubKey;
+                        COptCCParams p;
+                        
+                        if (scriptPubKey.IsPayToCryptoCondition(p) && p.IsValid())
+                        {
+                            // VDXF tags are stored in the master COptCCParams vKeys array (last element of vData)
+                            COptCCParams masterForKeys;
+                            if (p.vData.size() > 1 && (masterForKeys = COptCCParams(p.vData.back())).IsValid())
+                            {
+                                for (const auto &oneKey : masterForKeys.vKeys)
+                                {
+                                    if (oneKey.which() == COptCCParams::ADDRTYPE_INDEX)
+                                    {
+                                        uint160 indexID = GetDestinationID(oneKey);
+                                        LogPrintf("vdxf tag found: %s\n", EncodeDestination(oneKey).c_str());
+                                        if (indexID == filterTagID)
+                                        {
+                                            outputHasTag = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Skip this output if it doesn't have the matching tag
+                        if (!outputHasTag)
+                        {
+                            continue;
+                        }
+                    }
+                }
+                else
+                {
+                    // Couldn't load transaction, skip it when filtering by tag
+                    continue;
+                }
+            }
+
             std::string address;
             if (!getAddressFromIndex(it->first.type, it->first.hashBytes, address)) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unknown address type");
@@ -2243,6 +2313,12 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             if (chainActive.Height() >= it->first.blockHeight)
             {
                 delta.push_back(Pair("blocktime", chainActive[it->first.blockHeight]->GetBlockTime()));
+            }
+
+            // Add the tag to the output if filtering was enabled and tag was found
+            if (hasTagFilter && outputHasTag)
+            {
+                delta.push_back(Pair("vdxftag", EncodeDestination(CIndexID(filterTagID))));
             }
 
             uint256 blockHash;

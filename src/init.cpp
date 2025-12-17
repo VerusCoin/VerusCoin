@@ -1820,8 +1820,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             fReindex = true;
         }
 
-        fCurrencyIndex = GetBoolArg("-currencyindex", false);
         pblocktree->ReadFlag("currencyindex", checkval);
+        fCurrencyIndex = GetBoolArg("-currencyindex", checkval);
         if ( checkval != fCurrencyIndex )
         {
             pblocktree->WriteFlag("currencyindex", fCurrencyIndex);
@@ -1905,6 +1905,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 if (!fReindex && fInsightExplorer != GetBoolArg("-insightexplorer", fInsightExplorer) ) {
                     strLoadError = _("You need to rebuild the database using -reindex to change -insightexplorer");
                     break;
+                }
+
+                // Check for changed -currencyindex state
+                pblocktree->ReadFlag("currencyindex", fCurrencyIndex);
+                if (!fReindex && fCurrencyIndex != GetBoolArg("-currencyindex", DEFAULT_CURRENCYINDEX) ) {
+                    strLoadError = _("You need to rebuild the database using -reindex to change -currencyindex");
+                    break;
+                }
+                // Ensure flag is set after reindex
+                if (fReindex) {
+                    fCurrencyIndex = GetBoolArg("-currencyindex", DEFAULT_CURRENCYINDEX);
+                    pblocktree->WriteFlag("currencyindex", fCurrencyIndex);
                 }
 
                 // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks

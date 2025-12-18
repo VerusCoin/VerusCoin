@@ -60,7 +60,8 @@ struct CCoin {
 extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
 extern UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false);
 extern UniValue mempoolInfoToJSON();
-extern UniValue mempoolToJSON(bool fVerbose = false);
+extern UniValue mempoolToJSON(bool fVerbose = false, bool fullTxes = false, bool includeNonSmart = false, bool excludeNonSmart = false,
+                              int32_t includeCodes = 0, int32_t excludeCodes = 0, uint32_t expiresBefore = 0, uint32_t expiresAfter = 0);
 extern UniValue blockheaderToJSON(const CBlockIndex* blockindex);
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex, bool fIncludeAsm=true);
 

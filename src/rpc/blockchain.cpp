@@ -455,7 +455,6 @@ UniValue mempoolToJSON(bool fVerbose = false, bool fullTxes = false, bool includ
         BOOST_FOREACH(const CTxMemPoolEntry& e, mempool.mapTx)
         {
             const CTransaction& tx = e.GetTx();
-
             const uint256& hash = tx.GetHash();
 
             // filter, if we should
@@ -466,8 +465,8 @@ UniValue mempoolToJSON(bool fVerbose = false, bool fullTxes = false, bool includ
                 if (!mempool.IsKnownReserveTransaction(hash, rtxd) ||
                     ((rtxd.flags & includeMask) == 0 && !includeNonSmart) ||
                     ((rtxd.flags & includeMask) == 0 && excludeNonSmart) ||
-                    ((rtxd.flags & includeMask) != 0 && (rtxd.flags & includeCodes == 0)) || 
-                    (rtxd.flags & excludeCodes != 0) ||
+                    ((rtxd.flags & includeMask) != 0 && (rtxd.flags & includeCodes) == 0) || 
+                    (rtxd.flags & excludeCodes) != 0 ||
                     (expiresBefore && tx.nExpiryHeight >= expiresBefore) ||
                     (expiresAfter && tx.nExpiryHeight <= expiresAfter))
                 {
@@ -650,7 +649,7 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
                     if (includeCodes & 0x10000)
                     {
                         includeNonSmart = true;
-                        includeCodes &= ~includeMask;
+                        includeCodes &= includeMask;
                     }
                 }
             }
@@ -666,7 +665,7 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
                     if (excludeCodes & 0x10000)
                     {
                         excludeNonSmart = true;
-                        excludeCodes &= ~includeMask;
+                        excludeCodes &= includeMask;
                     }
                 }
             }

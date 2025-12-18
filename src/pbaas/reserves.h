@@ -1731,18 +1731,18 @@ public:
     enum EFlagBits {
         IS_VALID=1,                             // known to be valid
         IS_REJECT=2,                            // if set, tx is known to be invalid
-        IS_RESERVE=4,                           // if set, this transaction affects reserves and/or price if mined
+        IS_RESERVE_OUTPUT=4,                    // if set, this transaction is a reserve output
         IS_RESERVETRANSFER=8,                   // is this a reserve/exchange transaction?
-        IS_LIMIT=0x10,                          // if reserve exchange, is it a limit order?
-        IS_FILLORKILL=0x20,                     // If set, this can expire, but the tx goes in as a refund (not supported yet in PBaaS 1.0)
-        IS_FILLORKILLFAIL=0x40,                 // If set, this is an expired fill or kill in a valid tx
+        IS_RESERVE_DEPOSIT=0x10,                // if reserve deposit?
+        IS_EVAL_NONE=0x20,                      // If set, this is an EVAL_NONE output
+        IS_COMMITMENT=0x40,                     // If set, this is an identity or advanced commitment
         IS_IMPORT=0x80,                         // non-supplemental export
         IS_EXPORT=0x100,                        // import
         IS_IDENTITY=0x200,                      // If set, this is an identity definition or update
         IS_IDENTITY_DEFINITION=0x400,           // If set, this is an identity definition
         IS_HIGH_FEE=0x800,                      // If set, this may have "absurdly high fees"
         IS_CURRENCY_DEFINITION=0x1000,          // If set, this is a currency definition
-        IS_CHAIN_NOTARIZATION=0x2000,            // If set, this is to do with primary chain notarization and connection
+        IS_CHAIN_NOTARIZATION=0x2000,           // If set, this is to do with primary chain notarization and connection
         IS_EVIDENCE_STORAGE=0x4000              // If set, this is evidence or storage
     };
 
@@ -1753,7 +1753,7 @@ public:
     const CTransaction *ptx;                    // pointer to the actual transaction if valid
     uint16_t flags;                             // indicates transaction state
     std::map<uint160, CReserveInOuts> currencies; // currency entries in this transaction
-    int16_t numBuys = 0;                        // each limit conversion that is valid before a certain block should account for FILL_OR_KILL_FEE
+    int16_t numBuys = 0;
     int16_t numSells = 0;
     int16_t numTransfers = 0;                   // number of transfers, each of which also requires a transfer fee
     CAmount nativeIn = 0;
@@ -1763,7 +1763,7 @@ public:
     CReserveTransactionDescriptor() :
         flags(0),
         ptx(NULL),
-        numBuys(0),                             // each limit conversion that is valid before a certain block should account for FILL_OR_KILL_FEE
+        numBuys(0),
         numSells(0),
         numTransfers(0),
         nativeIn(0),
@@ -1776,11 +1776,11 @@ public:
 
     bool IsReject() const { return flags & IS_REJECT; }
     bool IsValid() const { return flags & IS_VALID && !IsReject(); }
-    bool IsReserve() const { return IsValid() && flags & IS_RESERVE; }
+    bool IsReserveOutput() const { return IsValid() && flags & IS_RESERVE_OUTPUT; }
     bool IsReserveTransfer() const { return flags & IS_RESERVETRANSFER; }
-    bool IsLimit() const { return flags & IS_LIMIT; }
-    bool IsFillOrKill() const { return flags & IS_FILLORKILL; }
-    bool IsFillOrKillFail() const { return flags & IS_FILLORKILLFAIL; }
+    bool IsReserveDeposit() const { return flags & IS_RESERVE_DEPOSIT; }
+    bool IsEvalNone() const { return flags & IS_EVAL_NONE; }
+    bool IsCommitment() const { return flags & IS_COMMITMENT; }
     bool IsIdentity() const { return flags & IS_IDENTITY; }
     bool IsImport() const { return flags & IS_IMPORT; }
     bool IsExport() const { return flags & IS_EXPORT; }

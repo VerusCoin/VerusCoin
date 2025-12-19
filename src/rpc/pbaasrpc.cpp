@@ -17166,12 +17166,8 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
     uint160 searchKey = vdxfKey;
     if (!vdxfKey.IsNull())
     {
-        uint160 identityID = GetDestinationID(idID);
-        // Step 1: Bind the original key to the identity ID
-        uint160 intermediateKey = CCrossChainRPCData::GetConditionID(vdxfKey, identityID);
-        
-        // Step 2: Bind the intermediate key with the multimap key
-        searchKey = CCrossChainRPCData::GetConditionID(CVDXF_Data::MultiMapKey(), intermediateKey);
+        // Bind the identity ID to the vdxfkey, then to the multimap key
+        searchKey = CCrossChainRPCData::GetConditionID(CVDXF_Data::MultiMapKey(), CCrossChainRPCData::GetConditionID(vdxfKey, GetDestinationID(idID)));
     }
     
     bool keepDeleted = params.size() > 6 ? uni_get_bool(params[6]) : false;

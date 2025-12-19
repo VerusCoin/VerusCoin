@@ -92,6 +92,7 @@ bool fInsightExplorer = false;      // this ensures that the primary address and
 bool fAddressIndex = true;
 bool fSpentIndex = true;
 bool fTimestampIndex = false;
+bool fCurrencyIndex = false;
 bool fHavePruned = false;
 bool fPruneMode = false;
 bool fIsBareMultisigStd = true;
@@ -3492,8 +3493,10 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
     std::vector<CAddressIndexDbEntry> addressIndex;
     std::vector<CAddressUnspentDbEntry> addressUnspentIndex;
     std::vector<CSpentIndexDbEntry> spentIndex;
+    std::map<CAddressReserveBalanceKey, CAddressReserveBalanceValue> reserveBalanceUpdates;
 
     uint32_t nHeight = pindex->GetHeight();
+    bool isPBaaS = CConstVerusSolutionVector::GetVersionByHeight(nHeight) >= CActivationHeight::ACTIVATE_PBAAS;
 
     // undo transactions in reverse order
     for (int i = block.vtx.size() - 1; i >= 0; i--) {
@@ -3550,6 +3553,24 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                             addressUnspentIndex.push_back(make_pair(
                                 CAddressUnspentKey(AddressTypeFromDest(dest), destID, hash, k),
                                 CAddressUnspentValue()));
+
+                            // Undo reserve currency balance additions for PBaaS
+                            if (fCurrencyIndex && isPBaaS)
+                            {
+                                CCurrencyValueMap reserves = out.ReserveOutValue();
+                                for (auto &oneCurrency : reserves.valueMap)
+                                {
+                                    if (oneCurrency.second != 0)
+                                    {
+                                        CAddressReserveBalanceKey balKey(AddressTypeFromDest(dest), destID, oneCurrency.first);
+                                        reserveBalanceUpdates[balKey].balance -= oneCurrency.second;
+                                        if (oneCurrency.second > 0)
+                                        {
+                                            reserveBalanceUpdates[balKey].received -= oneCurrency.second;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3654,6 +3675,20 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                                 addressUnspentIndex.push_back(make_pair(
                                     CAddressUnspentKey(AddressTypeFromDest(dest), destID, input.prevout.hash, input.prevout.n),
                                     CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight)));
+
+                                // Restore reserve currency balances (undo spending) for PBaaS
+                                if (fCurrencyIndex && isPBaaS)
+                                {
+                                    CCurrencyValueMap reserves = prevout.ReserveOutValue();
+                                    for (auto &oneCurrency : reserves.valueMap)
+                                    {
+                                        if (oneCurrency.second != 0)
+                                        {
+                                            CAddressReserveBalanceKey balKey(AddressTypeFromDest(dest), destID, oneCurrency.first);
+                                            reserveBalanceUpdates[balKey].balance += oneCurrency.second;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -3715,6 +3750,19 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
         if (!pblocktree->UpdateAddressUnspentIndex(addressUnspentIndex)) {
             AbortNode(state, "Failed to write address unspent index");
             return DISCONNECT_FAILED;
+        }
+
+        // Update reserve balance index to undo block changes for PBaaS
+        if (fCurrencyIndex && isPBaaS && reserveBalanceUpdates.size() > 0) {
+            std::vector<CAddressReserveBalanceEntry> balanceVec;
+            balanceVec.reserve(reserveBalanceUpdates.size());
+            for (const auto& entry : reserveBalanceUpdates) {
+                balanceVec.push_back(entry);
+            }
+            if (!pblocktree->UpdateAddressReserveBalance(balanceVec)) {
+                AbortNode(state, "Failed to update address reserve balance index");
+                return DISCONNECT_FAILED;
+            }
         }
     }
     // insightexplorer
@@ -3907,6 +3955,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     std::vector<CAddressIndexDbEntry> addressIndex;
     std::vector<CAddressUnspentDbEntry> addressUnspentIndex;
     std::vector<CSpentIndexDbEntry> spentIndex;
+    std::map<CAddressReserveBalanceKey, CAddressReserveBalanceValue> reserveBalanceUpdates;
 
     CCheckQueueControl<CScriptCheck> control(fExpensiveChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
     CCurrencyDefinition newThisChain;
@@ -4494,6 +4543,20 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                 addressUnspentIndex.push_back(make_pair(
                                     CAddressUnspentKey(AddressTypeFromDest(dest), destID, input.prevout.hash, input.prevout.n),
                                     CAddressUnspentValue()));
+
+                                // Track reserve currency balance spending for PBaaS
+                                if (fCurrencyIndex && isPBaaS)
+                                {
+                                    CCurrencyValueMap reserves = prevout.ReserveOutValue();
+                                    for (auto &oneCurrency : reserves.valueMap)
+                                    {
+                                        if (oneCurrency.second != 0)
+                                        {
+                                            CAddressReserveBalanceKey balKey(AddressTypeFromDest(dest), destID, oneCurrency.first);
+                                            reserveBalanceUpdates[balKey].balance -= oneCurrency.second;
+                                        }
+                                    }
+                                }
                             }
                         }
                         if (fSpentIndex) {
@@ -4890,6 +4953,24 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                         CAddressUnspentKey(AddressTypeFromDest(dest), destID, txhash, k),
                                         CAddressUnspentValue(out.nValue, out.scriptPubKey, nHeight)));
                                 }
+
+                                // Track reserve currency balances for PBaaS
+                                if (fCurrencyIndex && isPBaaS)
+                                {
+                                    CCurrencyValueMap reserves = out.ReserveOutValue();
+                                    for (auto &oneCurrency : reserves.valueMap)
+                                    {
+                                        if (oneCurrency.second != 0)
+                                        {
+                                            CAddressReserveBalanceKey balKey(AddressTypeFromDest(dest), destID, oneCurrency.first);
+                                            reserveBalanceUpdates[balKey].balance += oneCurrency.second;
+                                            if (oneCurrency.second > 0)
+                                            {
+                                                reserveBalanceUpdates[balKey].received += oneCurrency.second;
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -5160,6 +5241,18 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         if (!pblocktree->UpdateAddressUnspentIndex(addressUnspentIndex)) {
             return AbortNode(state, "Failed to write address unspent index");
+        }
+
+        // Write reserve balance updates for PBaaS
+        if (fCurrencyIndex && isPBaaS && reserveBalanceUpdates.size() > 0) {
+            std::vector<CAddressReserveBalanceEntry> balanceVec;
+            balanceVec.reserve(reserveBalanceUpdates.size());
+            for (const auto& entry : reserveBalanceUpdates) {
+                balanceVec.push_back(entry);
+            }
+            if (!pblocktree->UpdateAddressReserveBalance(balanceVec)) {
+                return AbortNode(state, "Failed to write address reserve balance index");
+            }
         }
     }
 

@@ -33,6 +33,7 @@ static const char DB_TIMESTAMPINDEX = 'S';
 static const char DB_BLOCKHASHINDEX = 'z';
 static const char DB_SPENTINDEX = 'p';
 static const char DB_BLOCK_INDEX = 'b';
+static const char DB_ADDRESSRESERVEBALANCE = 'r';
 
 static const char DB_BEST_BLOCK = 'B';
 static const char DB_BEST_SPROUT_ANCHOR = 'a';
@@ -412,6 +413,66 @@ bool CBlockTreeDB::ReadAddressIndex(
                     pcursor->Next();
                 } catch (const std::exception& e) {
                     return error("failed to get address index value");
+                }
+            } else {
+                break;
+            }
+        } catch (const std::exception& e) {
+            break;
+        }
+    }
+
+    return true;
+}
+
+bool CBlockTreeDB::UpdateAddressReserveBalance(const std::vector<CAddressReserveBalanceEntry> &vect) {
+    CDBBatch batch(*this);
+    for (const auto &entry : vect) {
+        // Read existing balance if it exists
+        CAddressReserveBalanceValue existingValue;
+        if (Read(make_pair(DB_ADDRESSRESERVEBALANCE, entry.first), existingValue)) {
+            // Update existing balance
+            existingValue.balance += entry.second.balance;
+            existingValue.received += entry.second.received;
+            batch.Write(make_pair(DB_ADDRESSRESERVEBALANCE, entry.first), existingValue);
+        } else {
+            // Write new balance
+            batch.Write(make_pair(DB_ADDRESSRESERVEBALANCE, entry.first), entry.second);
+        }
+    }
+    return WriteBatch(batch);
+}
+
+bool CBlockTreeDB::ReadAddressReserveBalance(
+    uint160 addressHash, 
+    int type, 
+    std::map<uint160, CAddressReserveBalanceValue> &balanceMap)
+{
+    boost::scoped_ptr<CDBIterator> pcursor(NewIterator());
+    
+    // Seek to the first entry for this address
+    CAddressReserveBalanceKey seekKey(type, addressHash, uint160());
+    pcursor->Seek(make_pair(DB_ADDRESSRESERVEBALANCE, seekKey));
+
+    while (pcursor->Valid()) {
+        boost::this_thread::interruption_point();
+        try {
+            pair<char, CAddressReserveBalanceKey> keyObj;
+            pcursor->GetKey(keyObj);
+            char chType = keyObj.first;
+            CAddressReserveBalanceKey key = keyObj.second;
+
+            // Check if we're still on the correct address
+            if (chType == DB_ADDRESSRESERVEBALANCE && 
+                key.type == type && 
+                key.hashBytes == addressHash) {
+                try {
+                    CAddressReserveBalanceValue value;
+                    pcursor->GetValue(value);
+                    balanceMap[key.currencyID] = value;
+                    pcursor->Next();
+                } catch (const std::exception& e) {
+                    return error("failed to get reserve balance value");
                 }
             } else {
                 break;

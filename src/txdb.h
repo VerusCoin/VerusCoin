@@ -25,6 +25,8 @@ struct CAddressUnspentValue;
 struct CAddressIndexKey;
 struct CAddressIndexIteratorKey;
 struct CAddressIndexIteratorHeightKey;
+struct CAddressReserveBalanceKey;
+struct CAddressReserveBalanceValue;
 struct CSpentIndexKey;
 struct CSpentIndexValue;
 struct CTimestampIndexKey;
@@ -33,6 +35,7 @@ struct CTimestampBlockIndexKey;
 struct CTimestampBlockIndexValue;
 
 typedef std::pair<CAddressUnspentKey, CAddressUnspentValue> CAddressUnspentDbEntry;
+typedef std::pair<CAddressReserveBalanceKey, CAddressReserveBalanceValue> CAddressReserveBalanceEntry;
 typedef std::pair<CAddressIndexKey, CAmount> CAddressIndexDbEntry;
 typedef std::pair<CSpentIndexKey, CSpentIndexValue> CSpentIndexDbEntry;
 
@@ -121,6 +124,8 @@ public:
     bool WriteAddressIndex(const std::vector<CAddressIndexDbEntry> &vect);
     bool EraseAddressIndex(const std::vector<CAddressIndexDbEntry> &vect);
     bool ReadAddressIndex(uint160 addressHash, int type, std::vector<CAddressIndexDbEntry> &addressIndex, int start = 0, int end = 0);
+    bool UpdateAddressReserveBalance(const std::vector<CAddressReserveBalanceEntry> &vect);
+    bool ReadAddressReserveBalance(uint160 addressHash, int type, std::map<uint160, CAddressReserveBalanceValue> &balanceMap);
     bool WriteTimestampIndex(const CTimestampIndexKey &timestampIndex);
     bool ReadTimestampIndex(const unsigned int &high, const unsigned int &low, const bool fActiveOnly, std::vector<std::pair<uint256, unsigned int> > &vect);
     bool WriteTimestampBlockIndex(const CTimestampBlockIndexKey &blockhashIndex, const CTimestampBlockIndexValue &logicalts);

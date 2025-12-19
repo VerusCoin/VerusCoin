@@ -2842,7 +2842,7 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                 case EVAL_NONE:
                 {
                     COptCCParams masterForKeys;
-                    if (!p.vData.size() || !(masterForKeys = COptCCParams(p.vData.back())).IsValid() || masterForKeys.m > 1 || masterForKeys.n != masterForKeys.m)
+                    if (!p.vData.size() || !(masterForKeys = COptCCParams(p.vData.back())).IsValid())
                     {
                         LogPrintf("Invalid output, master.m=%d, , master.n=%d\n", masterForKeys.m, masterForKeys.n);
                         flags &= ~IS_VALID;

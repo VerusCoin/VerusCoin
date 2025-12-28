@@ -681,23 +681,43 @@ extern LRUCache<std::tuple<int, uint256, uint160>, std::vector<std::pair<CAddres
 extern LRUCache<std::tuple<uint160, uint256, uint32_t>, std::vector<CInputDescriptor>> chainTransferCache;
 extern LRUCache<std::tuple<uint256, uint32_t, uint32_t, CUTXORef, uint160, uint160>, CCurrencyValueMap> priorConversionCache;
 
-void ClearMainCaches()
+void ClearMainCaches(bool finalizationEvidence=true,
+                     bool reserveTransfer=true,
+                     bool offerMap=true,
+                     bool chainTransfer=true,
+                     bool priorConversion=true)
 {
-    finalizationEvidenceCache.Clear();
-    reserveTransferCache.Clear();
-    OfferMapCache.Clear();
-    chainTransferCache.Clear();
-    priorConversionCache.Clear();
+    if (finalizationEvidence)
+    {
+        finalizationEvidenceCache.Clear();
+    }
+    if (reserveTransfer)
+    {
+        reserveTransferCache.Clear();
+    }
+    if (offerMap)
+    {
+        OfferMapCache.Clear();
+    }
+    if (chainTransfer)
+    {
+        chainTransferCache.Clear();
+    }
+    if (priorConversion)
+    {
+        priorConversionCache.Clear();
+    }
 }
 
 UniValue clearrawmempool(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-            "clearrawmempool\n"
+            "clearrawmempool '{\"cache\":[\"evidence\",\"reservetransfer\",\"offermap\",\"chaintransfer\",\"priorconversion\"]}'\n"
             "\nClear the mempool of all transactions on this node.\n"
             "\nArguments:\n"
-            "   none\n"
+            "   []          (array, optional) if present, this is an array of caches to clear. If not present all caches are clear.\n"
+            "                                 If present, only specified caches are cleared.\n\n"
             "\nResult:\n"
             "   none on success\n"
             "\n"
@@ -706,10 +726,57 @@ UniValue clearrawmempool(const UniValue& params, bool fHelp)
             + HelpExampleRpc("clearrawmempool", "")
         );
 
+    bool allCache = true;
+    bool finalizationEvidence=false;
+    bool reserveTransfer=false;
+    bool offerMap=false;
+    bool chainTransfer=false;
+    bool priorConversion=false;
+
+    if (params.size() > 0)
+    {
+        if (!params[0].isArray() || params[0].size() > 5)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "If parameter is present, it must be an array specifying only the caches to clear");
+        }
+        allCache = false;
+        for (int i = 0; i < params.size(); i++)
+        {
+            if (uni_get_str(params[0][i]) == "evidence")
+            {
+                finalizationEvidence = true;
+            }
+            else if (uni_get_str(params[0][i]) == "reservetransfer")
+            {
+                reserveTransfer = true;
+            }
+            else if (uni_get_str(params[0][i]) == "offermap")
+            {
+                offerMap = true;
+            }
+            else if (uni_get_str(params[0][i]) == "chaintransfer")
+            {
+                chainTransfer = true;
+            }
+            else if (uni_get_str(params[0][i]) == "priorconversion")
+            {
+                priorConversion = true;
+            }
+            else
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "If parameter is present, it must be either an empty array or containing only \"evidence\", \"reservetransfer\", \"offermap\", \"chaintransfer\", or \"priorconversion\"");
+            }
+        }
+    }
+
     LOCK2(cs_main, mempool.cs);
 
     mempool.clear();
-    ClearMainCaches();
+    ClearMainCaches(allCache || finalizationEvidence,
+                    allCache || reserveTransfer,
+                    allCache || offerMap,
+                    allCache || chainTransfer,
+                    allCache || priorConversion);
     return NullUniValue;
 }
 

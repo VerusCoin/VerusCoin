@@ -358,6 +358,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-checkblocks=<n>", strprintf(_("How many blocks to check at startup (default: %u, 0 = all)"), 288));
     strUsage += HelpMessageOpt("-checklevel=<n>", strprintf(_("How thorough the block verification of -checkblocks is (0-4, default: %u)"), 3));
     strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), "komodo.conf"));
+    strUsage += HelpMessageOpt("-currencyindex", _("Maintain a currency balance index for fast reserve currency lookups (default: 0)"));
     if (mode == HMM_BITCOIND)
     {
 #if !defined(WIN32)
@@ -1818,6 +1819,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             fprintf(stderr,"set timestampindex, will reindex. sorry will take a while.\n");
             fReindex = true;
         }
+
+        pblocktree->ReadFlag("currencyindex", checkval);
+        fCurrencyIndex = GetBoolArg("-currencyindex", checkval);
+        if ( checkval != fCurrencyIndex )
+        {
+            pblocktree->WriteFlag("currencyindex", fCurrencyIndex);
+            fprintf(stderr,"set currencyindex, will reindex. sorry will take a while.\n");
+            fReindex = true;
+        }
     }
 
     bool clearWitnessCaches = false;
@@ -1895,6 +1905,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 if (!fReindex && fInsightExplorer != GetBoolArg("-insightexplorer", fInsightExplorer) ) {
                     strLoadError = _("You need to rebuild the database using -reindex to change -insightexplorer");
                     break;
+                }
+
+                // Check for changed -currencyindex state
+                pblocktree->ReadFlag("currencyindex", fCurrencyIndex);
+                if (!fReindex && fCurrencyIndex != GetBoolArg("-currencyindex", DEFAULT_CURRENCYINDEX) ) {
+                    strLoadError = _("You need to rebuild the database using -reindex to change -currencyindex");
+                    break;
+                }
+                // Ensure flag is set after reindex
+                if (fReindex) {
+                    fCurrencyIndex = GetBoolArg("-currencyindex", DEFAULT_CURRENCYINDEX);
+                    pblocktree->WriteFlag("currencyindex", fCurrencyIndex);
                 }
 
                 // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks

@@ -3922,13 +3922,26 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
 
     LOCK2(cs_main, mempool.cs);
 
+    bool mevCheckTrigger = LogAcceptCategory("mevattack");
+
     if (start && end && chainActive.Height() >= end && (flags == CReserveTransfer::VALID) && !chainFilter.IsNull())
     {
         std::vector<std::pair<uint32_t, uint32_t>> blocksToLoad;
         std::vector<CInputDescriptor> transfersFromCache;
         for (uint32_t i = start; i <= end; i++)
         {
-            if (chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache))
+            if (mevCheckTrigger &&
+                chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache) &&
+                transfersFromCache.size() == 0 &&
+                unspentBy > chainActive.Height())
+            {
+                printf("%s: suspicious cache condition triggered. unspentBy: %u, chainActive.Height(): %u\n", __func__, unspentBy, chainActive.Height());
+                printf("i: %u, start: %u, end: %u\n", i, start, end);
+            }
+
+            if (chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache) &&
+                (transfersFromCache.size() != 0 ||
+                 unspentBy <= chainActive.Height()))
             {
                 // if we got transfers for this block, add them to the map
                 for (auto oneTransfer : transfersFromCache)
@@ -3957,6 +3970,12 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
         // if we found any in the cache, fill in the blocks that were not included
         // since we know none of the missing blocks will be found in the cache, get them with recursion that will cause a lookup
         // if we didn't find any, drop through and lookup
+
+        if (mevCheckTrigger)
+        {
+            printf("blocksToLoad.size(): %lu, start: %u, end: %u\n", blocksToLoad.size(), start, end);
+        }
+
         if (!(blocksToLoad.size() == 1 && blocksToLoad[0].first == start && blocksToLoad[0].second == end))
         {
             for (auto &onePair : blocksToLoad)
@@ -3976,10 +3995,20 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                          start,
                          end))
     {
+        if (mevCheckTrigger)
+        {
+            printf("failed - addressIndex.size(): %lu, start: %u, end: %u\n", addressIndex.size(), start, end);
+        }
+
         return false;
     }
     else
     {
+        if (mevCheckTrigger)
+        {
+            printf("addressIndex.size(): %lu, start: %u, end: %u\n", addressIndex.size(), start, end);
+        }
+
         // This call does not include outputs that were mined in as spent at the
         // end height requested
         for (auto it = addressIndex.begin(); it != addressIndex.end(); it++)
@@ -4002,6 +4031,10 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                 spentInfo.txid != checkingTxHash &&
                 spentInfo.blockHeight < unspentBy)
             {
+                if (mevCheckTrigger)
+                {
+                    printf("spent 1 from height: %d     ", spentInfo.blockHeight);
+                }
                 continue;
             }
 
@@ -4010,26 +4043,43 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
             if ((inCache = (reserveTransferCache.Get({it->first.txhash, (uint32_t)it->first.index}, cacheValue)) && mapBlockIndex.count(std::get<0>(cacheValue)) && chainActive.Contains(mapBlockIndex[std::get<0>(cacheValue)])) &&
                 ((chainFilter.IsNull() || chainFilter == std::get<2>(cacheValue).GetImportCurrency()) && (flags == CReserveTransfer::VALID)))
             {
+                if (mevCheckTrigger)
+                {
+                    printf("unspent 1 from cache of currency: %s\n", EncodeDestination(CIdentityID(std::get<2>(cacheValue).GetImportCurrency())).c_str());
+                }
                 inputDescriptors.insert(std::make_pair(std::make_pair(it->first.blockHeight, (std::get<2>(cacheValue).flags & std::get<2>(cacheValue).IMPORT_TO_SOURCE) ? std::get<2>(cacheValue).FirstCurrency() : std::get<2>(cacheValue).destCurrencyID), std::make_pair(std::get<1>(cacheValue), std::get<2>(cacheValue))));
             }
             else if (!inCache)
             {
                 if (myGetTransaction(it->first.txhash, ntx, blkHash))
                 {
+                    if (mevCheckTrigger)
+                    {
+                        printf("got tx: %s\n", it->first.txhash.GetHex().c_str());
+                    }
+                    
                     COptCCParams p, m;
                     CReserveTransfer rt;
                     if (ntx.vout[it->first.index].scriptPubKey.IsPayToCryptoCondition(p) &&
                         p.evalCode == EVAL_RESERVE_TRANSFER &&
                         p.vData.size() > 1 && (rt = CReserveTransfer(p.vData[0])).IsValid() &&
                         (m = COptCCParams(p.vData[1])).IsValid() &&
-                        (nofilter || ((rt.flags & rt.IMPORT_TO_SOURCE) ? rt.FirstCurrency() : rt.destCurrencyID) == chainFilter) &&
+                        (nofilter || rt.GetImportCurrency() == chainFilter) &&
                         (rt.flags & flags) == flags)
                     {
+                        if (mevCheckTrigger)
+                        {
+                            printf("unspent 1 w/o cache of currency: %s\n", EncodeDestination(CIdentityID(rt.GetImportCurrency())).c_str());
+                        }
                         inputDescriptors.insert(std::make_pair(std::make_pair(it->first.blockHeight, (rt.flags & rt.IMPORT_TO_SOURCE) ? rt.FirstCurrency() : rt.destCurrencyID),
                                                     std::make_pair(CInputDescriptor(ntx.vout[it->first.index].scriptPubKey, ntx.vout[it->first.index].nValue, CTxIn(COutPoint(it->first.txhash, it->first.index))),
                                                                 rt)));
 
                         reserveTransferCache.Put({it->first.txhash, (uint32_t)it->first.index}, {blkHash, CInputDescriptor(ntx.vout[it->first.index].scriptPubKey, ntx.vout[it->first.index].nValue, CTxIn(COutPoint(it->first.txhash, it->first.index))), rt});
+                    }
+                    else if (mevCheckTrigger)
+                    {
+                        printf("incorrect rt: %s\n", rt.ToUniValue().write(1,2).c_str());
                     }
                 }
                 else
@@ -4038,6 +4088,10 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                     printf("%s: cannot retrieve transaction %s\n", __func__, it->first.txhash.GetHex().c_str());
                     return false;
                 }
+            }
+            else if (mevCheckTrigger)
+            {
+                printf("in cache, but failed rt check, chainFilter: %s, flags: %x, rt: %s\n", EncodeDestination(CIdentityID(chainFilter)).c_str(), flags, std::get<2>(cacheValue).ToUniValue().write(1,2).c_str());
             }
         }
         if (!chainFilter.IsNull() && (flags == CReserveTransfer::VALID))

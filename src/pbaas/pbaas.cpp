@@ -1560,6 +1560,11 @@ bool PrecheckCrossChainExport(const CTransaction &tx, int32_t outNum, CValidatio
 
         // ensure we use the correct condition
         // and that there is no risk of missing valid transfers with the check we end up with here
+        if (LogAcceptCategory("mevattack"))
+        {
+            printf("Getting chain transfers for %s, start: %u, end: %u, height: %u\n", ConnectedChains.GetFriendlyCurrencyName(ccx.destCurrencyID).c_str(),
+                    ccx.sourceHeightStart, ccx.sourceHeightEnd, height);
+        }
         if (ccx.sourceHeightStart > 0 &&
             (!GetChainTransfersUnspentBy(inputDescriptors, ccx.destCurrencyID, ccx.sourceHeightStart, ccx.sourceHeightEnd, height, tx.GetHash()) ||
              !GetChainTransfersBetween(inputDescriptors, ccx.destCurrencyID, ccx.sourceHeightEnd + 1, std::min(height, ccx.sourceHeightEnd + 2))))
@@ -1628,10 +1633,12 @@ bool PrecheckCrossChainExport(const CTransaction &tx, int32_t outNum, CValidatio
         {
             if (LogAcceptCategory("crosschainexports") || LogAcceptCategory("mevattack"))
             {
-                printf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld\n",
-                       __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size());
-                LogPrintf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld\n",
-                       __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size());
+                printf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld, _txInputs.size(): %ld\n",
+                       __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size(), _txInputs.size());
+                printf("start: %u, end: %u, chainActive.Height(): %u, unpentBy: %u\n", ccx.sourceHeightStart, ccx.sourceHeightEnd, chainActive.Height(), height);
+                LogPrintf("%s: mismatch transfer sizes: ccx.reserveTransfers.size(): %ld, reserveTransfers.size(): %ld, txInputVec.size(): %ld, _txInputs.size(): %ld\n",
+                       __func__, ccx.reserveTransfers.size(), reserveTransfers.size(), txInputVec.size(), _txInputs.size());
+                LogPrintf("start: %u, end: %u, chainActive.Height(): %u, unpentBy: %u\n", ccx.sourceHeightStart, ccx.sourceHeightEnd, chainActive.Height(), height);
                 printf("height: %u, currencyname: %s, ccx: %s\n", height, thisDef.name.c_str(), ccx.ToUniValue().write(1,2).c_str());
                 LogPrintf("height: %u, currencyname: %s, ccx: %s\n", height, thisDef.name.c_str(), ccx.ToUniValue().write(1,2).c_str());
                 printf("firsinput: %s\n", CUTXORef(tx.vin[0].prevout).ToUniValue().write().c_str());

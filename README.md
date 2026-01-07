@@ -1,5 +1,5 @@
 
-## VerusCoin version 1.2.13
+## VerusCoin version 1.2.14
 
 Arguably the world's most advanced technology, zero knowledge privacy enabled, multi-chain blockchain protocol, Verus Public Blockchains as a Service (PBaaS) combines Sapling zero knowledge technology with an intelligent, multi-chain, provable protocol, using interchain smart transactions. Verus PBaaS also enables merge mining and cross-chain staking with a completely original, combined proof of stake/proof of work consensus algorithm, Proof of Power, that can be mined on CPUs and mobile phones, and also solves the nothing at stake problem. With this and its approach towards CPU mining and ASICs, Verus Coin strives to be one of the most naturally decentralizing and attack resistant blockchain networks in existence.
 

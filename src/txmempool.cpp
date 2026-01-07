@@ -25,7 +25,7 @@ using namespace std;
 
 CTxMemPoolEntry::CTxMemPoolEntry():
     nFee(0), nTxSize(0), nModSize(0), nUsageSize(0), nTime(0), dPriority(0.0),
-    hadNoDependencies(false), spendsCoinbase(false), hasReserve(false), feeDelta(0)
+    hadNoDependencies(false), spendsCoinbase(false), feeDelta(0)
 {
     nHeight = MEMPOOL_HEIGHT;
 }
@@ -33,9 +33,9 @@ CTxMemPoolEntry::CTxMemPoolEntry():
 CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& _tx, const CAmount& _nFee,
                                  int64_t _nTime, double _dPriority,
                                  unsigned int _nHeight, bool poolHasNoInputsOf,
-                                 bool _spendsCoinbase, uint32_t _nBranchId, bool hasreserve, int64_t FeeDelta):
+                                 bool _spendsCoinbase, uint32_t _nBranchId, int64_t FeeDelta):
     tx(std::make_shared<CTransaction>(_tx)), nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight),
-    hadNoDependencies(poolHasNoInputsOf), hasReserve(hasreserve),
+    hadNoDependencies(poolHasNoInputsOf),
     spendsCoinbase(_spendsCoinbase), feeDelta(FeeDelta), nBranchId(_nBranchId)
 {
     nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);

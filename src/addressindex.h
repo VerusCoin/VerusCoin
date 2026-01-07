@@ -284,6 +284,75 @@ struct CMempoolAddressDeltaKeyCompare
     }
 };
 
+// Reserve currency balance index for fast balance lookups
+// Key: {addressType, addressHash, currencyID}
+// Value: balance (CAmount)
+struct CAddressReserveBalanceKey {
+    unsigned int type;
+    uint160 hashBytes;
+    uint160 currencyID;
+
+    size_t GetSerializeSize(int nType, int nVersion) const {
+        return 41;
+    }
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        ser_writedata8(s, type);
+        hashBytes.Serialize(s);
+        currencyID.Serialize(s);
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        type = ser_readdata8(s);
+        hashBytes.Unserialize(s);
+        currencyID.Unserialize(s);
+    }
+
+    CAddressReserveBalanceKey(unsigned int addressType, uint160 addressHash, uint160 currency) {
+        type = addressType;
+        hashBytes = addressHash;
+        currencyID = currency;
+    }
+
+    CAddressReserveBalanceKey() {
+        SetNull();
+    }
+
+    void SetNull() {
+        type = 0;
+        hashBytes.SetNull();
+        currencyID.SetNull();
+    }
+
+    bool operator<(const CAddressReserveBalanceKey& other) const {
+        if (type != other.type) return type < other.type;
+        if (hashBytes != other.hashBytes) return hashBytes < other.hashBytes;
+        return currencyID < other.currencyID;
+    }
+};
+
+struct CAddressReserveBalanceValue {
+    CAmount balance;
+    CAmount received;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(balance);
+        READWRITE(received);
+    }
+
+    CAddressReserveBalanceValue(CAmount bal = 0, CAmount rec = 0) : balance(bal), received(rec) {}
+
+    void SetNull() {
+        balance = 0;
+        received = 0;
+    }
+};
+
+typedef std::pair<CAddressReserveBalanceKey, CAddressReserveBalanceValue> CAddressReserveBalanceEntry;
+
 class CAddressIndexDBEntryCompare
 {
 public:

@@ -2671,7 +2671,6 @@ void CReserveTransactionDescriptor::AddReserveConversionFees(const uint160 &curr
 
 void CReserveTransactionDescriptor::AddReserveOutput(const CTokenOutput &ro)
 {
-    flags |= IS_RESERVE;
     for (auto &oneCur : ro.reserveValues.valueMap)
     {
         if (oneCur.first != ASSETCHAINS_CHAINID && oneCur.second)
@@ -2683,7 +2682,6 @@ void CReserveTransactionDescriptor::AddReserveOutput(const CTokenOutput &ro)
 
 void CReserveTransactionDescriptor::AddReserveTransfer(const CReserveTransfer &rt)
 {
-    flags |= IS_RESERVE;
     for (auto &oneCur : rt.TotalCurrencyOut().valueMap)
     {
         if (oneCur.first != ASSETCHAINS_CHAINID && oneCur.second)
@@ -2841,6 +2839,27 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
         {
             switch (p.evalCode)
             {
+                case EVAL_NONE:
+                {
+                    COptCCParams masterForKeys;
+                    if (!p.vData.size() || !(masterForKeys = COptCCParams(p.vData.back())).IsValid())
+                    {
+                        LogPrintf("Invalid output, master.m=%d, , master.n=%d\n", masterForKeys.m, masterForKeys.n);
+                        flags &= ~IS_VALID;
+                        flags |= IS_REJECT;
+                        return;
+                    }
+                    flags |= IS_EVAL_NONE;
+                }
+                break;
+
+                case EVAL_IDENTITY_COMMITMENT:
+                {
+                    flags |= IS_COMMITMENT;
+                }
+                break;
+
+
                 case EVAL_IDENTITY_RESERVATION:
                 case EVAL_IDENTITY_ADVANCEDRESERVATION:
                 {
@@ -2927,6 +2946,7 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                         flags |= IS_REJECT;
                         return;
                     }
+                    flags |= IS_RESERVE_DEPOSIT;
                     for (auto &oneCur : rd.reserveValues.valueMap)
                     {
                         if (oneCur.first != ASSETCHAINS_CHAINID)
@@ -2946,6 +2966,7 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                         flags |= IS_REJECT;
                         return;
                     }
+                    flags |= IS_RESERVE_OUTPUT;
                     for (auto &oneCur : ro.reserveValues.valueMap)
                     {
                         if (oneCur.first != ASSETCHAINS_CHAINID && oneCur.second)
@@ -3470,16 +3491,10 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
     }
     if (reservesIn.valueMap.size())
     {
-        flags |= IS_RESERVE;
         for (auto &oneCur : reservesIn.valueMap)
         {
             currencies[oneCur.first].reserveIn = oneCur.second;
         }
-    }
-
-    if (!IsReserve() && ReserveOutputMap().valueMap.size())
-    {
-        flags |= IS_RESERVE;
     }
 }
 

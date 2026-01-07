@@ -47,24 +47,23 @@ class CTxMemPoolEntry
 {
 private:
     std::shared_ptr<const CTransaction> tx;
-    CAmount nFee; //! Cached to avoid expensive parent-transaction lookups
-    size_t nTxSize; //! ... and avoid recomputing tx size
-    size_t nModSize; //! ... and modified size for priority
-    size_t nUsageSize; //! ... and total memory usage
-    CFeeRate feeRate; //! ... and fee per kB
-    int64_t nTime; //! Local time when entering the mempool
-    double dPriority; //! Priority when entering the mempool
-    unsigned int nHeight; //! Chain height when entering the mempool
+    CAmount nFee;           //! Cached to avoid expensive parent-transaction lookups
+    size_t nTxSize;         //! ... and avoid recomputing tx size
+    size_t nModSize;        //! ... and modified size for priority
+    size_t nUsageSize;      //! ... and total memory usage
+    CFeeRate feeRate;       //! ... and fee per kB
+    int64_t nTime;          //! Local time when entering the mempool
+    double dPriority;       //! Priority when entering the mempool
+    unsigned int nHeight;   //! Chain height when entering the mempool
     bool hadNoDependencies; //! Not dependent on any other txs when it entered the mempool
-    bool spendsCoinbase; //! keep track of transactions that spend a coinbase
-    bool hasReserve; //! keep track of transactions that hold reserve currency
-    int64_t feeDelta;          //!< Used for determining the priority of the transaction for mining in a block
-    uint32_t nBranchId; //! Branch ID this transaction is known to commit to, cached for efficiency
+    bool spendsCoinbase;    //! keep track of transactions that spend a coinbase
+    int64_t feeDelta;       //!< Used for determining the priority of the transaction for mining in a block
+    uint32_t nBranchId;     //! Branch ID this transaction is known to commit to, cached for efficiency
 
 public:
     CTxMemPoolEntry(const CTransaction& _tx, const CAmount& _nFee,
                     int64_t _nTime, double _dPriority, unsigned int _nHeight,
-                    bool poolHasNoInputsOf, bool spendsCoinbase, uint32_t nBranchId, bool hasreserve=false, int64_t FeeDelta=0);
+                    bool poolHasNoInputsOf, bool spendsCoinbase, uint32_t nBranchId, int64_t FeeDelta=0);
     CTxMemPoolEntry();
     CTxMemPoolEntry(const CTxMemPoolEntry& other);
 

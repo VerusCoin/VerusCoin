@@ -136,6 +136,7 @@ static const unsigned int INVENTORY_BROADCAST_MAX = 7 * INVENTORY_BROADCAST_INTE
 static const bool DEFAULT_TIMESTAMPINDEX = false;
 static const unsigned int DEFAULT_DB_MAX_OPEN_FILES = 1000;
 static const bool DEFAULT_DB_COMPRESSION = true;
+static const bool DEFAULT_CURRENCYINDEX = false;
 
 // Sanity check the magic numbers when we change them
 BOOST_STATIC_ASSERT(DEFAULT_BLOCK_MAX_SIZE <= MAX_BLOCK_SIZE);
@@ -185,6 +186,9 @@ extern bool fSpentIndex;
 
 // Maintain a full timestamp index, used to query for blocks within a time range
 extern bool fTimestampIndex;
+
+// Maintain a currency balance index for fast reserve currency balance lookups (PBaaS)
+extern bool fCurrencyIndex;
 
 // END insightexplorer
 

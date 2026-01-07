@@ -2159,6 +2159,7 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             "  \"chaininfo\" (boolean) Include chain info in results, only applies if start and end specified\n"
             "  \"friendlynames\" (boolean) Include additional array of friendly names keyed by currency i-addresses\n"
             "  \"verbosity\" (number) (default == 0), if 1, include output information for spends, including all reserve amounts and destinations\n"
+            "  \"vdxftag\" (string) Optional X-address (indexId) to filter outputs by VDXF tag\n"
             "}\n"
             "\nResult:\n"
             "[\n"
@@ -2179,6 +2180,21 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
     bool includeChainInfo = uni_get_bool(find_value(params[0].get_obj(), "chaininfo"));
     bool friendlyNames = uni_get_bool(find_value(params[0].get_obj(), "friendlynames"));
     int verbosity = uni_get_bool(find_value(params[0].get_obj(), "verbosity"));
+    std::string vdxfTagStr = uni_get_str(find_value(params[0].get_obj(), "vdxftag"));
+
+    // Parse and validate vdxftag if provided
+    uint160 filterTagID;
+    bool hasTagFilter = false;
+    if (!vdxfTagStr.empty())
+    {
+        CTxDestination vdxfTagDest = DecodeDestination(vdxfTagStr);
+        if (vdxfTagDest.which() != COptCCParams::ADDRTYPE_INDEX)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "If vdxftag is specified, it must be an \"x\" address");
+        }
+        filterTagID = GetDestinationID(vdxfTagDest);
+        hasTagFilter = true;
+    }
 
     UniValue startValue = find_value(params[0].get_obj(), "start");
     UniValue endValue = find_value(params[0].get_obj(), "end");
@@ -2227,6 +2243,60 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
         CTransaction curTx;
 
         for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            // If tag filtering is enabled, check if this output has the matching tag
+            bool outputHasTag = false;
+            if (hasTagFilter)
+            {
+                // VDXF tags are only on outputs, not inputs, so skip spending entries
+                if (it->first.spending)
+                {
+                    continue;
+                }
+                uint256 blockHash;
+                if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
+                {
+                    // Check if output at this index has the requested VDXF tag
+                    if (it->first.index < curTx.vout.size())
+                    {
+                        const CScript &scriptPubKey = curTx.vout[it->first.index].scriptPubKey;
+                        COptCCParams p;
+                        
+                        if (scriptPubKey.IsPayToCryptoCondition(p) && p.IsValid())
+                        {
+                            // VDXF tags are stored in the master COptCCParams vKeys array (last element of vData)
+                            COptCCParams masterForKeys;
+                            if (p.vData.size() > 1 && (masterForKeys = COptCCParams(p.vData.back())).IsValid())
+                            {
+                                for (const auto &oneKey : masterForKeys.vKeys)
+                                {
+                                    if (oneKey.which() == COptCCParams::ADDRTYPE_INDEX)
+                                    {
+                                        uint160 indexID = GetDestinationID(oneKey);
+                                        LogPrintf("vdxf tag found: %s\n", EncodeDestination(oneKey).c_str());
+                                        if (indexID == filterTagID)
+                                        {
+                                            outputHasTag = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Skip this output if it doesn't have the matching tag
+                        if (!outputHasTag)
+                        {
+                            continue;
+                        }
+                    }
+                }
+                else
+                {
+                    // Couldn't load transaction, skip it when filtering by tag
+                    continue;
+                }
+            }
+
             std::string address;
             if (!getAddressFromIndex(it->first.type, it->first.hashBytes, address)) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unknown address type");
@@ -2243,6 +2313,12 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
             if (chainActive.Height() >= it->first.blockHeight)
             {
                 delta.push_back(Pair("blocktime", chainActive[it->first.blockHeight]->GetBlockTime()));
+            }
+
+            // Add the tag to the output if filtering was enabled and tag was found
+            if (hasTagFilter && outputHasTag)
+            {
+                delta.push_back(Pair("vdxftag", EncodeDestination(CIndexID(filterTagID))));
             }
 
             uint256 blockHash;
@@ -2333,40 +2409,82 @@ UniValue getaddressbalance(const UniValue& params, bool fHelp)
         }
     }
 
-    CTransaction curTx;
-
     CAmount balance = 0;
     CAmount received = 0;
 
     CCurrencyValueMap reserveBalance;
     CCurrencyValueMap reserveReceived;
 
-    for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
-        uint256 blockHash;
-        if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
-        {
-            if (it->first.spending) {
-                CTransaction priorOutTx;
-                if (myGetTransaction(curTx.vin[it->first.index].prevout.hash, priorOutTx, blockHash))
+    // Get reserve currency balances
+    if (fCurrencyIndex && CConstVerusSolutionVector::GetVersionByHeight(chainActive.Height()) >= CActivationHeight::ACTIVATE_PBAAS)
+    {
+        // Fast path: use the reserve balance index
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
+        }
+
+        for (const auto& addr : addresses) {
+            std::map<uint160, CAddressReserveBalanceValue> reserveBalances;
+            if (pblocktree->ReadAddressReserveBalance(addr.first, addr.second, reserveBalances))
+            {
+                for (const auto& balEntry : reserveBalances)
                 {
-                    reserveBalance -= priorOutTx.vout[curTx.vin[it->first.index].prevout.n].ReserveOutValue();
+                    if (balEntry.second.balance != 0)
+                    {
+                        reserveBalance.valueMap[balEntry.first] += balEntry.second.balance;
+                    }
+                    if (balEntry.second.received != 0)
+                    {
+                        reserveReceived.valueMap[balEntry.first] += balEntry.second.received;
+                    }
+                }
+            }
+        }
+    }
+    else if (CConstVerusSolutionVector::GetVersionByHeight(chainActive.Height()) >= CActivationHeight::ACTIVATE_PBAAS)
+    {
+        // Slow path: calculate reserve balances by scanning transactions
+        CTransaction curTx;
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            uint256 blockHash;
+            if (!it->first.txhash.IsNull() && (it->first.txhash == curTx.GetHash() || myGetTransaction(it->first.txhash, curTx, blockHash)))
+            {
+                if (it->first.spending) {
+                    CTransaction priorOutTx;
+                    if (myGetTransaction(curTx.vin[it->first.index].prevout.hash, priorOutTx, blockHash))
+                    {
+                        reserveBalance -= priorOutTx.vout[curTx.vin[it->first.index].prevout.n].ReserveOutValue();
+                    }
+                    else
+                    {
+                        throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to retrieve data for reserve output value");
+                    }
                 }
                 else
                 {
-                    throw JSONRPCError(RPC_DATABASE_ERROR, "Unable to retrieve data for reserve output value");
+                    reserveBalance += curTx.vout[it->first.index].ReserveOutValue();
+                    reserveReceived += curTx.vout[it->first.index].ReserveOutValue();
                 }
             }
-            else
-            {
-                reserveBalance += curTx.vout[it->first.index].ReserveOutValue();
-                reserveReceived += curTx.vout[it->first.index].ReserveOutValue();
-            }
-        }
 
-        if (it->second > 0) {
-            received += it->second;
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
         }
-        balance += it->second;
+    }
+    else
+    {
+        // Pre-PBaaS: only calculate native currency balance
+        for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++) {
+            if (it->second > 0) {
+                received += it->second;
+            }
+            balance += it->second;
+        }
     }
 
     UniValue result(UniValue::VOBJ);

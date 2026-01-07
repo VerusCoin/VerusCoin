@@ -441,62 +441,106 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
     return GetNetworkDifficulty();
 }
 
-UniValue mempoolToJSON(bool fVerbose = false)
+UniValue mempoolToJSON(bool fVerbose = false, bool fullTxes = false, bool includeNonSmart = false, bool excludeNonSmart = false,
+                       int32_t includeCodes = 0, int32_t excludeCodes = 0, uint32_t expiresBefore = 0, uint32_t expiresAfter = 0)
 {
-    if (fVerbose)
+    UniValue o(UniValue::VOBJ);
+    UniValue a(UniValue::VARR);
+    int32_t includeMask = 0x77fc;
+
+    if (fVerbose || fullTxes || includeNonSmart || excludeNonSmart || includeCodes || excludeCodes || expiresBefore || expiresAfter)
     {
         LOCK(mempool.cs);
-        UniValue o(UniValue::VOBJ);
+
         BOOST_FOREACH(const CTxMemPoolEntry& e, mempool.mapTx)
         {
-            const uint256& hash = e.GetTx().GetHash();
-            UniValue info(UniValue::VOBJ);
-            info.push_back(Pair("size", (int)e.GetTxSize()));
-            info.push_back(Pair("fee", ValueFromAmount(e.GetFee())));
-            info.push_back(Pair("time", e.GetTime()));
-            info.push_back(Pair("height", (int)e.GetHeight()));
-            info.push_back(Pair("startingpriority", e.GetPriority(e.GetHeight())));
-            info.push_back(Pair("currentpriority", e.GetPriority(chainActive.Height())));
             const CTransaction& tx = e.GetTx();
-            set<string> setDepends;
-            BOOST_FOREACH(const CTxIn& txin, tx.vin)
+            const uint256& hash = tx.GetHash();
+
+            // filter, if we should
+            if (includeNonSmart || excludeNonSmart || includeCodes || excludeCodes || expiresBefore || expiresAfter)
             {
-                if (mempool.exists(txin.prevout.hash))
-                    setDepends.insert(txin.prevout.hash.ToString());
+                // check all outputs & conditions, if we should not proceed, continue the loop
+                CReserveTransactionDescriptor rtxd;
+                if (!mempool.IsKnownReserveTransaction(hash, rtxd) ||
+                    ((rtxd.flags & includeMask) == 0 && !includeNonSmart) ||
+                    ((rtxd.flags & includeMask) == 0 && excludeNonSmart) ||
+                    ((rtxd.flags & includeMask) != 0 && (rtxd.flags & includeCodes) == 0) || 
+                    (rtxd.flags & excludeCodes) != 0 ||
+                    (expiresBefore && tx.nExpiryHeight >= expiresBefore) ||
+                    (expiresAfter && tx.nExpiryHeight <= expiresAfter))
+                {
+                    continue;
+                }
             }
 
-            UniValue depends(UniValue::VARR);
-            BOOST_FOREACH(const string& dep, setDepends)
-            {
-                depends.push_back(dep);
-            }
+            UniValue info(UniValue::VOBJ);
 
-            info.push_back(Pair("depends", depends));
-            o.push_back(Pair(hash.ToString(), info));
+            if (fVerbose)
+            {
+                info.push_back(Pair("size", (int)e.GetTxSize()));
+                info.push_back(Pair("fee", ValueFromAmount(e.GetFee())));
+                info.push_back(Pair("time", e.GetTime()));
+                info.push_back(Pair("height", (int)e.GetHeight()));
+                info.push_back(Pair("startingpriority", e.GetPriority(e.GetHeight())));
+                info.push_back(Pair("currentpriority", e.GetPriority(chainActive.Height())));
+
+                set<string> setDepends;
+                BOOST_FOREACH(const CTxIn& txin, tx.vin)
+                {
+                    if (mempool.exists(txin.prevout.hash))
+                        setDepends.insert(txin.prevout.hash.ToString());
+                }
+
+                UniValue depends(UniValue::VARR);
+                BOOST_FOREACH(const string& dep, setDepends)
+                {
+                    depends.push_back(dep);
+                }
+
+                info.push_back(Pair("depends", depends));
+            }
+            if (fullTxes)
+            {
+                // add full tx to info
+                UniValue jsonTx(UniValue::VOBJ);
+                uint256 blockHash;
+                TxToJSON(tx, blockHash, jsonTx);
+                info.pushKV("fulltx", jsonTx);
+                o.push_back(Pair(hash.ToString(), info));
+            }
+            else if (!fVerbose)
+            {
+                a.push_back(hash.ToString());
+            }
+            else
+            {
+                o.push_back(Pair(hash.ToString(), info));
+            }
         }
-        return o;
     }
     else
     {
         vector<uint256> vtxid;
         mempool.queryHashes(vtxid);
 
-        UniValue a(UniValue::VARR);
         BOOST_FOREACH(const uint256& hash, vtxid)
             a.push_back(hash.ToString());
-
-        return a;
     }
+    return (fVerbose || fullTxes) ? o : a;
 }
 
 UniValue getrawmempool(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "getrawmempool ( verbose )\n"
+            "getrawmempool ( verbose ) '{\"include\":[],\"exclude\":[]}'\n"
             "\nReturns all transaction ids in memory pool as a json array of string transaction ids.\n"
             "\nArguments:\n"
             "1. verbose           (boolean, optional, default=false) true for a json object, false for array of transaction ids\n"
+            "2. qualifiers        (object, optional, default=null) enables selective display of specific transaction types without others\n"
+            "\n"
+            
             "\nResult: (for verbose = false):\n"
             "[                     (json array of string)\n"
             "  \"transactionid\"     (string) The transaction id\n"
@@ -524,10 +568,111 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
     LOCK(cs_main);
 
     bool fVerbose = false;
-    if (params.size() > 0)
-        fVerbose = params[0].get_bool();
 
-    return mempoolToJSON(fVerbose);
+    std::set<std::string> validKeySet = {"include","exclude","expiresbefore","expiresafter", "fulltxes"};
+    std::string validKeys = "include, exclude, expiresbefore, expiresafter, fulltxes";
+
+    std::string validIncludes = "evalnone, currencydef, evidence, storage"
+                                "notarization, reservetransfer, reserveoutput, identitydefinition"
+                                "reservedeposit, export, import, identity"
+                                "commitment, identitycommitment, nonsmart";
+
+    // those postfixed with invalid should never be found
+    std::map<std::string, int32_t> keyWords = { {"evalnone", 0x20}, 
+                                                {"currencydef", 0x1000},
+                                                {"evidence", 0x4000}, 
+                                                {"storage", 0x4000}, 
+                                                {"notarization", 0x2000},
+                                                {"reservetransfer", 8},
+                                                {"reserveoutput", 4},
+                                                {"identitydefinition", 0x400},
+                                                {"reservedeposit", 0x10},
+                                                {"export", 0x100},
+                                                {"import", 0x80},
+                                                {"identity", 0x200},
+                                                {"commitment", 0x40},
+                                                {"identitycommitment", 0x40},
+                                                {"nonsmart", 0x10000} };
+
+    int32_t includeMask = 0x77fc;
+    int32_t includeCodes = 0;
+    bool includeNonSmart = false;
+    int32_t excludeCodes = 0;
+    bool excludeNonSmart = false;
+    uint32_t expiresBefore = 0;
+    uint32_t expiresAfter = 0;
+    bool displayFullTx = false;
+
+    if (params.size() > 0)
+    {
+        fVerbose = params[0].get_bool();
+        if (params.size() > 1)
+        {
+            UniValue param1 = params[1];
+            if (params[1].isStr())
+            {
+                param1.read(params[1].get_str());
+            }
+            if (!param1.isObject())
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter. Second parameter, if present, must be valid JSON. See help.");
+            }
+
+            std::vector<std::string> paramKeys = param1.getKeys();
+            if (paramKeys.size() > validKeySet.size())
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter. Second parameter, if present, must be valid JSON with the following keys: " + validKeys);
+            }
+            for (auto &oneKey : paramKeys)
+            {
+                if (!validKeySet.count(oneKey))
+                {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter. Second parameter, if present, must be valid JSON with only the following keys: " + validKeys);
+                }
+            }
+
+            // take the next parameter and use it to determine a query for mem pool transactions
+            UniValue includeUni = find_value(param1, "include");
+            UniValue excludeUni = find_value(param1, "exclude");
+            expiresBefore = uni_get_int64(find_value(param1, "expiresbefore"));
+            expiresAfter = uni_get_int64(find_value(param1, "expiresafter"));
+            displayFullTx = uni_get_bool(find_value(param1, "fulltxes"));
+            if (includeUni.isArray() && includeUni.size() <= keyWords.size())
+            {
+                for (int i = 0; i < includeUni.size(); i++)
+                {
+                    if (!includeUni[i].isStr() || !keyWords.count(uni_get_str(includeUni[i])))
+                    {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter for \"includes\", must be an array of valid strings, including: " + validIncludes);
+                    }
+                    includeCodes |= keyWords[uni_get_str(includeUni[i])];
+                    if (includeCodes & 0x10000)
+                    {
+                        includeNonSmart = true;
+                        includeCodes &= includeMask;
+                    }
+                }
+            }
+            if (excludeUni.isArray() && excludeUni.size() <= keyWords.size())
+            {
+                for (int i = 0; i < excludeUni.size(); i++)
+                {
+                    if (!excludeUni[i].isStr() || !keyWords.count(uni_get_str(excludeUni[i])))
+                    {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter for \"excludes\", must be an array of valid strings, including: " + validIncludes);
+                    }
+                    excludeCodes |= keyWords[uni_get_str(excludeUni[i])];
+                    if (excludeCodes & 0x10000)
+                    {
+                        excludeNonSmart = true;
+                        excludeCodes &= includeMask;
+                    }
+                }
+            }
+        }
+    }
+
+    return mempoolToJSON(fVerbose, displayFullTx, includeNonSmart, excludeNonSmart, includeCodes, excludeCodes, expiresBefore, expiresAfter);
 }
 
 extern LRUCache<CUTXORef, std::tuple<uint256, CTransaction, std::vector<std::pair<CObjectFinalization, CNotaryEvidence>>>> finalizationEvidenceCache;
@@ -536,23 +681,43 @@ extern LRUCache<std::tuple<int, uint256, uint160>, std::vector<std::pair<CAddres
 extern LRUCache<std::tuple<uint160, uint256, uint32_t>, std::vector<CInputDescriptor>> chainTransferCache;
 extern LRUCache<std::tuple<uint256, uint32_t, uint32_t, CUTXORef, uint160, uint160>, CCurrencyValueMap> priorConversionCache;
 
-void ClearMainCaches()
+void ClearMainCaches(bool finalizationEvidence=true,
+                     bool reserveTransfer=true,
+                     bool offerMap=true,
+                     bool chainTransfer=true,
+                     bool priorConversion=true)
 {
-    finalizationEvidenceCache.Clear();
-    reserveTransferCache.Clear();
-    OfferMapCache.Clear();
-    chainTransferCache.Clear();
-    priorConversionCache.Clear();
+    if (finalizationEvidence)
+    {
+        finalizationEvidenceCache.Clear();
+    }
+    if (reserveTransfer)
+    {
+        reserveTransferCache.Clear();
+    }
+    if (offerMap)
+    {
+        OfferMapCache.Clear();
+    }
+    if (chainTransfer)
+    {
+        chainTransferCache.Clear();
+    }
+    if (priorConversion)
+    {
+        priorConversionCache.Clear();
+    }
 }
 
 UniValue clearrawmempool(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-            "clearrawmempool\n"
+            "clearrawmempool '{\"cache\":[\"evidence\",\"reservetransfer\",\"offermap\",\"chaintransfer\",\"priorconversion\"]}'\n"
             "\nClear the mempool of all transactions on this node.\n"
             "\nArguments:\n"
-            "   none\n"
+            "   []          (array, optional) if present, this is an array of caches to clear. If not present all caches are clear.\n"
+            "                                 If present, only specified caches are cleared.\n\n"
             "\nResult:\n"
             "   none on success\n"
             "\n"
@@ -561,10 +726,57 @@ UniValue clearrawmempool(const UniValue& params, bool fHelp)
             + HelpExampleRpc("clearrawmempool", "")
         );
 
+    bool allCache = true;
+    bool finalizationEvidence=false;
+    bool reserveTransfer=false;
+    bool offerMap=false;
+    bool chainTransfer=false;
+    bool priorConversion=false;
+
+    if (params.size() > 0)
+    {
+        if (!params[0].isArray() || params[0].size() > 5)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "If parameter is present, it must be an array specifying only the caches to clear");
+        }
+        allCache = false;
+        for (int i = 0; i < params.size(); i++)
+        {
+            if (uni_get_str(params[0][i]) == "evidence")
+            {
+                finalizationEvidence = true;
+            }
+            else if (uni_get_str(params[0][i]) == "reservetransfer")
+            {
+                reserveTransfer = true;
+            }
+            else if (uni_get_str(params[0][i]) == "offermap")
+            {
+                offerMap = true;
+            }
+            else if (uni_get_str(params[0][i]) == "chaintransfer")
+            {
+                chainTransfer = true;
+            }
+            else if (uni_get_str(params[0][i]) == "priorconversion")
+            {
+                priorConversion = true;
+            }
+            else
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "If parameter is present, it must be either an empty array or containing only \"evidence\", \"reservetransfer\", \"offermap\", \"chaintransfer\", or \"priorconversion\"");
+            }
+        }
+    }
+
     LOCK2(cs_main, mempool.cs);
 
     mempool.clear();
-    ClearMainCaches();
+    ClearMainCaches(allCache || finalizationEvidence,
+                    allCache || reserveTransfer,
+                    allCache || offerMap,
+                    allCache || chainTransfer,
+                    allCache || priorConversion);
     return NullUniValue;
 }
 

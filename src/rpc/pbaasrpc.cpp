@@ -527,6 +527,16 @@ bool SetThisChain(const UniValue &chainDefinition, CCurrencyDefinition *retDef)
     mapArgs["-endblock"] = to_string(PBAAS_ENDBLOCK);
     mapArgs["-ac_supply"] = to_string(ASSETCHAINS_SUPPLY);
     mapArgs["-gatewayconverterissuance"] = to_string(ASSETCHAINS_ISSUANCE);
+
+    // default to opt-out contract upgrade if this is non-testnet Verus and there is no "-approvecontractupgrade" set
+    if (!PBAAS_TESTMODE && ASSETCHAINS_CHAINID == VERUS_CHAINID && !mapArgs.count("-approvecontractupgrade"))
+    {
+        auto upgradeContractAddress = CTransferDestination::DecodeEthDestination("0x6a25e3c0cbff55c6faa19404fa6389489fb0f6fc");
+        if (!upgradeContractAddress.IsNull())
+        {
+            APPROVE_CONTRACT_UPGRADE = CTransferDestination(CTransferDestination::DEST_ETH, ::AsVector(upgradeContractAddress));
+        }
+    }
     return true;
 }
 
@@ -3912,13 +3922,26 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
 
     LOCK2(cs_main, mempool.cs);
 
+    bool mevCheckTrigger = LogAcceptCategory("mevattack");
+
     if (start && end && chainActive.Height() >= end && (flags == CReserveTransfer::VALID) && !chainFilter.IsNull())
     {
         std::vector<std::pair<uint32_t, uint32_t>> blocksToLoad;
         std::vector<CInputDescriptor> transfersFromCache;
         for (uint32_t i = start; i <= end; i++)
         {
-            if (chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache))
+            if (mevCheckTrigger &&
+                chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache) &&
+                transfersFromCache.size() == 0 &&
+                unspentBy > chainActive.Height())
+            {
+                printf("%s: suspicious cache condition triggered. unspentBy: %u, chainActive.Height(): %u\n", __func__, unspentBy, chainActive.Height());
+                printf("i: %u, start: %u, end: %u\n", i, start, end);
+            }
+
+            if (chainTransferCache.Get({chainFilter, chainActive[i]->GetBlockHash(), unspentBy}, transfersFromCache) &&
+                (transfersFromCache.size() != 0 ||
+                 unspentBy <= chainActive.Height()))
             {
                 // if we got transfers for this block, add them to the map
                 for (auto oneTransfer : transfersFromCache)
@@ -3947,6 +3970,12 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
         // if we found any in the cache, fill in the blocks that were not included
         // since we know none of the missing blocks will be found in the cache, get them with recursion that will cause a lookup
         // if we didn't find any, drop through and lookup
+
+        if (mevCheckTrigger)
+        {
+            printf("blocksToLoad.size(): %lu, start: %u, end: %u\n", blocksToLoad.size(), start, end);
+        }
+
         if (!(blocksToLoad.size() == 1 && blocksToLoad[0].first == start && blocksToLoad[0].second == end))
         {
             for (auto &onePair : blocksToLoad)
@@ -3966,10 +3995,20 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                          start,
                          end))
     {
+        if (mevCheckTrigger)
+        {
+            printf("failed - addressIndex.size(): %lu, start: %u, end: %u\n", addressIndex.size(), start, end);
+        }
+
         return false;
     }
     else
     {
+        if (mevCheckTrigger)
+        {
+            printf("addressIndex.size(): %lu, start: %u, end: %u\n", addressIndex.size(), start, end);
+        }
+
         // This call does not include outputs that were mined in as spent at the
         // end height requested
         for (auto it = addressIndex.begin(); it != addressIndex.end(); it++)
@@ -3992,6 +4031,10 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                 spentInfo.txid != checkingTxHash &&
                 spentInfo.blockHeight < unspentBy)
             {
+                if (mevCheckTrigger)
+                {
+                    printf("spent 1 from height: %d     ", spentInfo.blockHeight);
+                }
                 continue;
             }
 
@@ -4000,26 +4043,43 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
             if ((inCache = (reserveTransferCache.Get({it->first.txhash, (uint32_t)it->first.index}, cacheValue)) && mapBlockIndex.count(std::get<0>(cacheValue)) && chainActive.Contains(mapBlockIndex[std::get<0>(cacheValue)])) &&
                 ((chainFilter.IsNull() || chainFilter == std::get<2>(cacheValue).GetImportCurrency()) && (flags == CReserveTransfer::VALID)))
             {
+                if (mevCheckTrigger)
+                {
+                    printf("unspent 1 from cache of currency: %s\n", EncodeDestination(CIdentityID(std::get<2>(cacheValue).GetImportCurrency())).c_str());
+                }
                 inputDescriptors.insert(std::make_pair(std::make_pair(it->first.blockHeight, (std::get<2>(cacheValue).flags & std::get<2>(cacheValue).IMPORT_TO_SOURCE) ? std::get<2>(cacheValue).FirstCurrency() : std::get<2>(cacheValue).destCurrencyID), std::make_pair(std::get<1>(cacheValue), std::get<2>(cacheValue))));
             }
             else if (!inCache)
             {
                 if (myGetTransaction(it->first.txhash, ntx, blkHash))
                 {
+                    if (mevCheckTrigger)
+                    {
+                        printf("got tx: %s\n", it->first.txhash.GetHex().c_str());
+                    }
+                    
                     COptCCParams p, m;
                     CReserveTransfer rt;
                     if (ntx.vout[it->first.index].scriptPubKey.IsPayToCryptoCondition(p) &&
                         p.evalCode == EVAL_RESERVE_TRANSFER &&
                         p.vData.size() > 1 && (rt = CReserveTransfer(p.vData[0])).IsValid() &&
                         (m = COptCCParams(p.vData[1])).IsValid() &&
-                        (nofilter || ((rt.flags & rt.IMPORT_TO_SOURCE) ? rt.FirstCurrency() : rt.destCurrencyID) == chainFilter) &&
+                        (nofilter || rt.GetImportCurrency() == chainFilter) &&
                         (rt.flags & flags) == flags)
                     {
+                        if (mevCheckTrigger)
+                        {
+                            printf("unspent 1 w/o cache of currency: %s\n", EncodeDestination(CIdentityID(rt.GetImportCurrency())).c_str());
+                        }
                         inputDescriptors.insert(std::make_pair(std::make_pair(it->first.blockHeight, (rt.flags & rt.IMPORT_TO_SOURCE) ? rt.FirstCurrency() : rt.destCurrencyID),
                                                     std::make_pair(CInputDescriptor(ntx.vout[it->first.index].scriptPubKey, ntx.vout[it->first.index].nValue, CTxIn(COutPoint(it->first.txhash, it->first.index))),
                                                                 rt)));
 
                         reserveTransferCache.Put({it->first.txhash, (uint32_t)it->first.index}, {blkHash, CInputDescriptor(ntx.vout[it->first.index].scriptPubKey, ntx.vout[it->first.index].nValue, CTxIn(COutPoint(it->first.txhash, it->first.index))), rt});
+                    }
+                    else if (mevCheckTrigger)
+                    {
+                        printf("incorrect rt: %s\n", rt.ToUniValue().write(1,2).c_str());
                     }
                 }
                 else
@@ -4028,6 +4088,10 @@ bool GetChainTransfersUnspentBy(std::multimap<std::pair<uint32_t, uint160>, std:
                     printf("%s: cannot retrieve transaction %s\n", __func__, it->first.txhash.GetHex().c_str());
                     return false;
                 }
+            }
+            else if (mevCheckTrigger)
+            {
+                printf("in cache, but failed rt check, chainFilter: %s, flags: %x, rt: %s\n", EncodeDestination(CIdentityID(chainFilter)).c_str(), flags, std::get<2>(cacheValue).ToUniValue().write(1,2).c_str());
             }
         }
         if (!chainFilter.IsNull() && (flags == CReserveTransfer::VALID))
@@ -7632,7 +7696,7 @@ UniValue makeoffer(const UniValue& params, bool fHelp)
     if (fHelp || params.size() < 2 || params.size() > 4)
     {
         throw runtime_error(
-            "makeoffer fromaddress '{\"changeaddress\":\"transparentoriaddress\", \"expiryheight\":blockheight, \"offer\":{\"currency\":\"anycurrency\", \"amount\":...} | {\"identity\":\"idnameoriaddress\",...}', \"for\":{\"address\":..., \"currency\":\"anycurrency\", \"amount\":...} | {\"name\":\"identityforswap\",\"parent\":\"parentid\",\"primaryaddresses\":[\"R-address(s)\"],\"minimumsignatures\":1,...}}' (returntx) (feeamount)\n"
+            "makeoffer fromaddress '{\"changeaddress\":\"transparentoriaddress\", \"expiryheight\":blockheight, \"offer\":{\"currency\":\"anycurrency\", \"amount\":...} | {\"identity\":\"idnameoriaddress\",...}, \"for\":{\"address\":..., \"currency\":\"anycurrency\", \"amount\":...} | {\"name\":\"identityforswap\",\"parent\":\"parentid\",\"primaryaddresses\":[\"R-address(s)\"],\"minimumsignatures\":1,...}}' (returntx) (feeamount)\n"
             "\nThis sends a transaction which provides a completely decentralized, fully on-chain an atomic swap offer for\n"
             "\"decentralized swapping of any blockchain asset, including any/multi currencies, NFTs, identities, contractual\n"
             "\"agreements and rights transfers, or to be used as bids for an on-chain auction of any blockchain asset(s).\n"
@@ -17096,6 +17160,7 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
             "    \"txproofs\"                           (bool, optional) default=false, if true, returns proof of ID\n"
             "    \"txproofheight\"                      (number, optional) default=\"height\", height from which to generate a proof\n"
             "    \"vdxfkey\"                            (vdxf key, optional) default=null, more selective search for specific content in ID\n"
+            "                                                               The key will be automatically bound to the identity and multimap key.\n"
             "    \"keepdeleted\"                        (bool, optional) default=false, if true, return deleted items as well\n"
 
             "\nResult:\n"
@@ -17149,7 +17214,26 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
         txProofHeight = lteHeight;
     }
 
-    uint160 vdxfKey = params.size() > 5 ? GetDestinationID(DecodeDestination(uni_get_str(params[5]))) : uint160();
+    uint160 vdxfKey;
+    if (params.size() > 5)
+    {
+        CTxDestination vdxfDest = DecodeDestination(uni_get_str(params[5]));
+        if (vdxfDest.which() != COptCCParams::ADDRTYPE_ID)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "vdxfkey parameter must be a valid i-address: \"" + uni_get_str(params[5]) + "\"");
+        }
+        vdxfKey = GetDestinationID(vdxfDest);
+    }
+    
+    // If a vdxfKey is provided, automatically transform it to the proper search key
+    // by binding it to the identity ID first, then binding that result with "vrsc::identity.multimapkey"
+    uint160 searchKey = vdxfKey;
+    if (!vdxfKey.IsNull())
+    {
+        // Bind the identity ID to the vdxfkey, then to the multimap key
+        searchKey = CCrossChainRPCData::GetConditionID(CVDXF_Data::MultiMapKey(), CCrossChainRPCData::GetConditionID(vdxfKey, GetDestinationID(idID)));
+    }
+    
     bool keepDeleted = params.size() > 6 ? uni_get_bool(params[6]) : false;
 
     CTxIn idTxIn;
@@ -17213,7 +17297,7 @@ UniValue getidentitycontent(const UniValue& params, bool fHelp)
                                                                    useMempool,
                                                                    txProof,
                                                                    txProofHeight,
-                                                                   vdxfKey,
+                                                                   searchKey,
                                                                    keepDeleted);
 
         // put the aggregated content map in the ID before rendering

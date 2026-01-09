@@ -75,6 +75,7 @@ using namespace std;
 
 extern void ThreadSendAlert();
 extern int32_t KOMODO_LOADINGBLOCKS;
+extern int32_t KOMODO_MININGTHREADS;
 extern bool VERUS_MINTBLOCKS;
 extern CTxDestination VERUS_DEFAULT_ARBADDRESS;
 extern std::vector<uint160> VERUS_ARBITRAGE_CURRENCIES;
@@ -2350,11 +2351,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     VERUS_MINTBLOCKS = GetBoolArg("-mint", false);
     mapArgs["-gen"] = gen || VERUS_MINTBLOCKS ? "1" : "0";
     mapArgs["-genproclimit"] = itostr(GetArg("-genproclimit", gen ? -1 : 0));
-
-    if (pwalletMain || !GetArg("-mineraddress", "").empty())
-        GenerateBitcoins(gen || VERUS_MINTBLOCKS, pwalletMain, GetArg("-genproclimit", gen ? -1 : 0));
+    // Update KOMODO_MININGTHREADS here since komodo_args runs before config file is read
+    KOMODO_MININGTHREADS = GetArg("-genproclimit", gen ? -1 : 0);
  #else
-    GenerateBitcoins(gen, GetArg("-genproclimit", -1));
+    KOMODO_MININGTHREADS = GetArg("-genproclimit", gen ? -1 : 0);
  #endif
 #endif
 
@@ -2367,6 +2367,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     SetRPCWarmupFinished();
     uiInterface.InitMessage(_("Done loading"));
+
+#ifdef ENABLE_MINING
+    // Start mining after RPC is warmed up and node is fully initialized
+    // This prevents potential hangs from mining threads waiting for initialization
+ #ifdef ENABLE_WALLET
+    if (pwalletMain || !GetArg("-mineraddress", "").empty())
+        GenerateBitcoins(gen || VERUS_MINTBLOCKS, pwalletMain, KOMODO_MININGTHREADS);
+ #else
+    GenerateBitcoins(gen, KOMODO_MININGTHREADS);
+ #endif
+#endif
 
 #ifdef ENABLE_WALLET
     if (pwalletMain) {

@@ -7522,6 +7522,10 @@ bool static LoadBlockIndexDB()
     pblocktree->ReadFlag("spentindex", fSpentIndex);
     LogPrintf("%s: spent index %s\n", __func__, fSpentIndex ? "enabled" : "disabled");
 
+    // Check whether we have a currency index
+    pblocktree->ReadFlag("currencyindex", fCurrencyIndex);
+    LogPrintf("%s: currency index %s\n", __func__, fCurrencyIndex ? "enabled" : "disabled");
+
     // insightexplorer
     // Check whether block explorer features are enabled
     pblocktree->ReadFlag("insightexplorer", fInsightExplorer);
@@ -7530,6 +7534,7 @@ bool static LoadBlockIndexDB()
     {
         fAddressIndex = fInsightExplorer;
         fSpentIndex = fInsightExplorer;
+        fCurrencyIndex = fInsightExplorer;
     }
     fTimestampIndex = fInsightExplorer;
 

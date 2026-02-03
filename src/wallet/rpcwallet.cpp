@@ -46,6 +46,7 @@ using namespace std;
 
 using namespace libzcash;
 
+CAmount GetIdentityFeeFactor(const CTransaction &tx, CReserveTransactionDescriptor &txDesc, bool &isIdentity);
 CAmount GetMinRelayFeeForOutputs(const std::vector<SendManyRecipient> &tOutputs, const std::vector<SendManyRecipient> &zOutputs, CAmount identityFeeFactor, bool isIdentity);
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
@@ -5023,9 +5024,11 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
 
     CMutableTransaction tx(origTx);
-    CAmount nFee;
+    CAmount nFee = 0;
     string strFailReason;
     int nChangePos = -1;
+    CAmount identityFeeFactor = 0;
+    bool isIdentity = false;
 
     if (params.size() > 1)
     {
@@ -5091,7 +5094,6 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         }
 
         CReserveTransactionDescriptor rtxd(tx, view, chainActive.Height() + 1);
-        nFee = DEFAULT_TRANSACTION_FEE;
         std::map<CUTXORef, CCurrencyValueMap> mapCoinsRet;
         CCurrencyValueMap fundWithAmount, valueRet;
         CAmount nativeRet, nativeTarget;
@@ -5109,6 +5111,21 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
         {
             nFee = AmountFromValue(params[3]);
         }
+        else
+        {
+            vector<SendManyRecipient> tOutputs;
+            std::vector<SendManyRecipient> zOutputs;
+
+            // Turn the txout set into a CRecipient vector
+            BOOST_FOREACH(const CTxOut& txOut, tx.vout)
+            {
+                SendManyRecipient recipient = {"", txOut.nValue, "", txOut.scriptPubKey};
+                tOutputs.push_back(recipient);
+            }
+            identityFeeFactor = GetIdentityFeeFactor(tx, rtxd, isIdentity);
+            nFee = GetMinRelayFeeForOutputs(tOutputs, zOutputs, identityFeeFactor, isIdentity);
+        }
+
         if (nFee)
         {
             fundWithAmount.valueMap[ASSETCHAINS_CHAINID] += nFee;
@@ -5163,7 +5180,9 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp)
     }
     else
     {
-        if(!pwalletMain->FundTransaction(tx, nFee, nChangePos, strFailReason))
+        CReserveTransactionDescriptor rtxd;
+        identityFeeFactor = GetIdentityFeeFactor(tx, rtxd, isIdentity);
+        if(!pwalletMain->FundTransaction(tx, nFee, nChangePos, strFailReason, identityFeeFactor, isIdentity))
             throw JSONRPCError(RPC_INTERNAL_ERROR, strFailReason);
     }
 

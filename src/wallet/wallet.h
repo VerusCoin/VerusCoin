@@ -1278,16 +1278,13 @@ public:
     CCurrencyValueMap GetUnconfirmedWatchOnlyReserveBalance() const;
     CAmount GetImmatureWatchOnlyBalance() const;
     CCurrencyValueMap GetImmatureWatchOnlyReserveBalance() const;
-    bool FundTransaction(CMutableTransaction& tx, CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason);
+    bool FundTransaction(CMutableTransaction& tx, CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason, CAmount identityFeeFactor, bool isIdentity);
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
-                           std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
+                           std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true, CAmount identityFeeFactor = 0, bool isIdentity = false);
 
     enum {
         RPC_OK = 1
     };
-    int CreateReserveTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
-                           int &nChangeOutputs, std::string& strFailReason, const CCoinControl *coinControl = NULL,
-                           const CTxDestination *pOnlyFromDest=NULL, bool sign = true);
     bool CommitTransaction(CWalletTx& wtxNew, boost::optional<CReserveKey&> reservekey);
 
     static CFeeRate minTxFee;

@@ -713,7 +713,7 @@ UniValue clearrawmempool(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "clearrawmempool '{\"cache\":[\"evidence\",\"reservetransfer\",\"offermap\",\"chaintransfer\",\"priorconversion\"]}'\n"
+            "clearrawmempool '[\"evidence\",\"reservetransfer\",\"offermap\",\"chaintransfer\",\"priorconversion\"]'\n"
             "\nClear the mempool of all transactions on this node.\n"
             "\nArguments:\n"
             "   []          (array, optional) if present, this is an array of caches to clear. If not present all caches are clear.\n"

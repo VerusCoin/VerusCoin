@@ -5124,6 +5124,13 @@ bool PrecheckReserveTransfer(const CTransaction &tx, int32_t outNum, CValidation
                 return state.Error("Preconversion transfers must use the native fee currency of the launching system " + rt.ToUniValue().write(1,2));
             }
         }
+        else if (ConnectedChains.CheckStrictPreconvert(height) &&
+                 rt.IsPreConversion())
+        {
+            return state.Error("Preconversion is only valid during pre-launch phase - currency " +
+                                    ConnectedChains.GetFriendlyCurrencyName(importState.currencyID) +
+                                    " is no longer in pre-launch.");
+        }
         else if (haveFullChain &&
                  ConnectedChains.CheckZeroViaOnlyPostLaunch(height) &&
                  !importState.IsLaunchCompleteMarker() &&
@@ -6516,12 +6523,22 @@ uint32_t CConnectedChains::GetOptimizedETHProofHeight(bool getVerusHeight) const
     return (getVerusHeight || _IsVerusActive() && !PBAAS_TESTMODE) ? PBAAS_OPTIMIZE_ETH_HEIGHT : 0;
 }
 
+uint32_t CConnectedChains::GetStrictPreconvertHeight(bool getVerusHeight) const
+{
+    return (getVerusHeight || IsVerusActive()) && !PBAAS_TESTMODE ? PBAAS_STRICT_PRECONVERT_HEIGHT : 0;
+}
+
 bool CConnectedChains::ShouldOptimizeETHProof() const
 {
     return chainActive.Height() >= GetOptimizedETHProofHeight();
 }
 
 bool CConnectedChains::CheckZeroViaOnlyPostLaunch(uint32_t height) const
+{
+    return height > GetZeroViaHeight(false);
+}
+
+bool CConnectedChains::CheckStrictPreconvert(uint32_t height) const
 {
     return height > GetZeroViaHeight(false);
 }

@@ -6540,7 +6540,7 @@ bool CConnectedChains::CheckZeroViaOnlyPostLaunch(uint32_t height) const
 
 bool CConnectedChains::CheckStrictPreconvert(uint32_t height) const
 {
-    return height > GetZeroViaHeight(false);
+    return height > GetStrictPreconvertHeight(false);
 }
 
 uint32_t CConnectedChains::IncludePostLaunchFeeHeight(bool getVerusHeight) const

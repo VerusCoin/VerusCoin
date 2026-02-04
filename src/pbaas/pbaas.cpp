@@ -4898,7 +4898,7 @@ bool PrecheckReserveTransfer(const CTransaction &tx, int32_t outNum, CValidation
         {
             LogPrintf("%s: DeFi functions temporarily disabled for security alert by notification oracle %s\n", PBAAS_DEFAULT_NOTIFICATION_ORACLE.c_str());
         }
-        return state.Error("DeFi functions temporarily disabled for security alert by notification oracle. Reserve transfer rejected " + rt.ToUniValue().write(1,2));
+        return state.Error("DeFi functions temporarily disabled for security alert by notification oracle. Reserve transfer rejected.");
     }
 
     if (tx.vout[outNum].scriptPubKey.IsPayToCryptoCondition(p) &&

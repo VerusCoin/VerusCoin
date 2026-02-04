@@ -509,7 +509,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
 
 /** Apply the effects of this block (with given index) on the UTXO set represented by coins */
 bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& coins,
-                  const CChainParams& chainparams, bool fJustCheck = false,bool fCheckPOW = false, bool updateCurrencyIndex = true);
+                  const CChainParams& chainparams, bool fJustCheck = false,bool fCheckPOW = false, bool updateCumulativeIndex = true);
 
 /** Context-independent validity checks */
 bool CheckBlockHeader(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const CBlockHeader& block, CValidationState& state, const CChainParams& chainparams, bool fCheckPOW = true);

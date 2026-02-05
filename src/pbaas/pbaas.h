@@ -62,6 +62,7 @@ static const uint32_t PBAAS_LAUNCH_REFUND_FIX_TESTNET_UPGRADE_02 = 1740679200; /
 static const uint32_t PBAAS_CHIPS_NOTARIZATION_FIX_UPGRADE = 1741798800; // GMT: Wednesday, March 12, 2025 5:00:00 PM
 static const uint32_t PBAAS_ALLCHAINS_NOTARIZATION_FIX_UPGRADE = 1743440400; // GMT: Monday, March 31, 2025 5:00:00 PM
 static const uint32_t PBAAS_ALLCHAINS_NOTARIZATION_FIX_TESTNET_UPGRADE = 1741798800; // GMT: Wednesday, March 12, 2025 5:00:00 PM
+static const uint32_t PBAAS_STRICT_PRECONVERT_HEIGHT = 3931100;
 
 class CUpgradeDescriptor
 {
@@ -1227,8 +1228,10 @@ public:
     bool IsUpgradeActive(const uint160 &upgradeID, uint32_t blockHeight=UINT32_MAX, uint32_t blockTime=UINT32_MAX) const;
     uint32_t GetZeroViaHeight(bool getVerusHeight) const;
     uint32_t GetOptimizedETHProofHeight(bool getVerusHeight=false) const;
+    uint32_t GetStrictPreconvertHeight(bool getVerusHeight) const;
     bool ShouldOptimizeETHProof() const;
     bool CheckZeroViaOnlyPostLaunch(uint32_t height) const;
+    bool CheckStrictPreconvert(uint32_t height) const;
     uint32_t IncludePostLaunchFeeHeight(bool getVerusHeight) const;
     bool IncludePostLaunchFees(uint32_t height) const;
     bool CheckClearConvert(uint32_t height) const;

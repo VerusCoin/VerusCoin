@@ -10445,6 +10445,74 @@ CAmount GetMinRelayFeeForBuilder(const TransactionBuilder &tb, CAmount identityF
     return minFee;
 }
 
+CAmount GetIdentityFeeFactor(const CTransaction &tx, CReserveTransactionDescriptor &txDesc, bool &isIdentity)
+{
+    // if this is an identity, determine the identityFeeFactor
+    CAmount identityFeeFactor = 0;
+    if (!txDesc.IsValid())
+    {
+        LOCK(cs_main);
+        LOCK2(smartTransactionCS, mempool.cs);
+        CCoinsView dummy;
+        CCoinsViewCache view(&dummy);
+        int64_t interest;
+        CAmount nValueIn = 0;
+        CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
+
+        view.SetBackend(viewMemPool);
+        txDesc = CReserveTransactionDescriptor(tx, view, chainActive.Height() + 1);
+    }
+
+    if (txDesc.IsValid())
+    {
+        if (txDesc.IsIdentity())
+        {
+            for (int j = 0; j < tx.vout.size(); j++)
+            {
+                auto &oneOut = tx.vout[j];
+                COptCCParams p;
+                uint160 oneIdID;
+                if (oneOut.scriptPubKey.IsPayToCryptoCondition(p) &&
+                    p.IsValid() &&
+                    p.version >= p.VERSION_V3 &&
+                    p.vData.size() &&
+                    p.evalCode == EVAL_IDENTITY_PRIMARY)
+                {
+                    CIdentity identity;
+                    if ((identity = CIdentity(p.vData[0])).IsValid())
+                    {
+                        if (!tx.IsCoinBase())
+                        {
+                            if (identity.contentMultiMap.size())
+                            {
+                                CDataStream ss(SER_DISK, PROTOCOL_VERSION);
+                                auto tempID = identity;
+                                tempID.contentMultiMap.clear();
+                                size_t serSize = GetSerializeSize(ss, identity) - GetSerializeSize(ss, tempID);
+                                identityFeeFactor += (serSize / 128) + ((serSize % 128) ? 1 : 0);
+                            }
+
+                            // if we have more primary addresses than 1 or more private addresses than 1, pay appropriate fee
+                            identityFeeFactor += identity.contentMap.size();
+                            identityFeeFactor += identity.primaryAddresses.size() > 1 ? identity.primaryAddresses.size() - 1 : 0;
+                            identityFeeFactor += identity.privateAddresses.size() > 1 ? identity.privateAddresses.size() - 1 : 0;
+                        }
+                        isIdentity = true;
+                    }
+                    else
+                    {
+                        isIdentity = false;
+                        return 0;
+                    }
+                }
+            }
+        }
+        return identityFeeFactor;
+    }
+    isIdentity = false;
+    return 0;
+}
+
 CAmount GetMinRelayFeeForOutputs(const std::vector<SendManyRecipient> &tOutputs, const std::vector<SendManyRecipient> &zOutputs, CAmount identityFeeFactor, bool isIdentity)
 {
     // Require that free transactions have sufficient priority to be mined in the next block.

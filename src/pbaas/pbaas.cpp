@@ -3834,7 +3834,10 @@ uint32_t CCurrencyDefinition::MagicNumber() const
     uint32_t crc0 = 0;
     bits256 hash;
 
-    LogPrint("magicnumber", "hashing buffer: %s\n", HexBytes(&extraBuffer[0], extraBuffer.size()).c_str());
+    if (extraBuffer.size())
+    {
+        LogPrint("magicnumber", "hashing buffer: %s\n", HexBytes(&extraBuffer[0], extraBuffer.size()).c_str());
+    }
 
     iguana_rwnum(1, &crcHeader[0], sizeof(supply), (void *)&supply);
     memcpy(&(crcHeader[sizeof(supply)]), currencyName.c_str(), nameLen);

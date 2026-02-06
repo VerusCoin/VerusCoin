@@ -7045,7 +7045,9 @@ CCoinbaseCurrencyState CConnectedChains::AddPendingConversions(CCurrencyDefiniti
                                                                int32_t curDefHeight,
                                                                const std::vector<CReserveTransfer> &extraConversions)
 {
-    if (curDef.launchSystemID == ASSETCHAINS_CHAINID && fromHeight < curDef.startBlock)
+    if (curDef.launchSystemID == ASSETCHAINS_CHAINID && (fromHeight < (curDef.startBlock - 1) || 
+                                                         !_lastNotarization.currencyState.IsLaunchConfirmed() ||
+                                                         !_lastNotarization.currencyState.IsLaunchCompleteMarker()))
     {
         return AddPrelaunchConversions(curDef, _lastNotarization.currencyState, fromHeight, height, curDefHeight, extraConversions);
     }

@@ -53,7 +53,7 @@ std::vector<unsigned char> uint64_to_vec_BE(uint64_t input){
  **/
 int matchingNibbleLength(std::vector<unsigned char> nibble1,std::vector<unsigned char> nibble2){
     int i;
-    for(i = 0;nibble1[i] == nibble2[i] && nibble1.size() > i;i++){}
+    for(i = 0; nibble1.size() > i && nibble1[i] == nibble2[i]; i++) {}
     return i;
 }
 

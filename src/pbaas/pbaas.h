@@ -1264,7 +1264,7 @@ public:
     bool IsUpgrade02Active(int64_t height=0) const;
     bool IsPBaaSRefundFixActive(int64_t height=0) const;
     bool IsPBaaSNotarizationFix01Active(int64_t height) const;
-    bool ShouldRefundDeFi(uint32_t height, const uint160 &currencyID) const;
+    bool ShouldForceRefundDeFi(uint32_t height, const uint160 &currencyID) const;
 
     uint32_t GetChainBranchId(const uint160 &sysID, int nHeight, const Consensus::Params& params) const;
 

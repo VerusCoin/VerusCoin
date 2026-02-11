@@ -3240,6 +3240,11 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                             return;
                         }
 
+                        if (ConnectedChains.ShouldForceRefundDeFi(nHeight, newState.currencyID))
+                        {
+                            newState = importNotarization.currencyState;
+                        }
+
                         if (importNotarization.currencyState.flags != newState.flags)
                         {
                             // this will be a transition, accept valid transitions without
@@ -4299,7 +4304,7 @@ bool CReserveTransactionDescriptor::AddReserveTransferImportOutputs(const CCurre
         return false;
     }
 
-    bool refundDeFi = ConnectedChains.ShouldRefundDeFi(height, importCurrencyID);
+    bool refundDeFi = ConnectedChains.ShouldForceRefundDeFi(height, importCurrencyID);
 
     bool isCrossSystemImport = nativeSourceCurrencyID != nativeDestCurrencyID;
 

@@ -1205,9 +1205,10 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                     pbn.currencyState.SetLaunchCompleteMarker(false);
                 }
 
+                uint32_t checkHeight = ccx.sourceHeightStart ? ccx.sourceHeightStart - 1 : 0;
                 if (!pbn.NextNotarizationInfo(sourceSystem,
                                                 importingToDef,
-                                                ccx.sourceHeightStart ? ccx.sourceHeightStart - 1 : 0,
+                                                checkHeight,
                                                 notarization.notarizationHeight,
                                                 reserveTransfers,
                                                 transferHash,
@@ -1223,6 +1224,11 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                 {
                     return state.Error("Invalid import notarization mutation\n");
                 }
+                if (ConnectedChains.ShouldForceRefundDeFi(checkHeight, notarization.currencyID))
+                {
+                    checkNotarization = notarization;
+                }
+
                 if (ccx.IsClearLaunch())
                 {
                     checkNotarization.SetLaunchComplete();
@@ -6856,9 +6862,13 @@ uint32_t CConnectedChains::GetChainBranchId(const uint160 &sysID, int height, co
     return !IsVerusMainnetActive() || height > fixHeight ? NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId : CurrentEpochBranchId(height, params);
 }
 
-bool CConnectedChains::ShouldRefundDeFi(uint32_t height, const uint160 &currencyID) const
+bool CConnectedChains::ShouldForceRefundDeFi(uint32_t height, const uint160 &currencyID) const
 {
-    return (_IsVerusActive() && !PBAAS_TESTMODE && height == PBAAS_REFUND_KAIJU_HEIGHT && currencyID == KaijuCurrencyID()) ? true : false;
+    return (_IsVerusActive() &&
+                !PBAAS_TESTMODE &&
+                (height == PBAAS_REFUND_KAIJU_HEIGHT ||
+                 height == (PBAAS_REFUND_KAIJU_HEIGHT - 1)) &&
+                currencyID == KaijuCurrencyID()) ? true : false;
 }
 
 bool CConnectedChains::ConfigureEthBridge(bool callToCheck)

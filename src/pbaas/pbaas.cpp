@@ -6856,6 +6856,11 @@ uint32_t CConnectedChains::GetChainBranchId(const uint160 &sysID, int height, co
     return !IsVerusMainnetActive() || height > fixHeight ? NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId : CurrentEpochBranchId(height, params);
 }
 
+bool CConnectedChains::ShouldRefundDeFi(uint32_t height, const uint160 &currencyID) const
+{
+    return (_IsVerusActive() && !PBAAS_TESTMODE && height == PBAAS_REFUND_KAIJU_HEIGHT && currencyID == KaijuCurrencyID()) ? true : false;
+}
+
 bool CConnectedChains::ConfigureEthBridge(bool callToCheck)
 {
     // first time through, we initialize the VETH gateway config file

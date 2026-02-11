@@ -110,15 +110,4 @@ struct komodo_ccdata
     char symbol[65];
 };
 
-struct komodo_state
-{
-    uint256 NOTARIZED_HASH,NOTARIZED_DESTTXID,MoM;
-    int32_t SAVEDHEIGHT,CURRENT_HEIGHT,NOTARIZED_HEIGHT,MoMdepth;
-    uint32_t SAVEDTIMESTAMP;
-    uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
-    struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTSi;
-    struct komodo_event **Komodo_events; int32_t Komodo_numevents;
-    uint32_t RTbufs[64][3]; uint64_t RTmask;
-};
-
 #endif /* KOMODO_STRUCTS_H */

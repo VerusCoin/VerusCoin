@@ -19,7 +19,6 @@
 #include "httpserver.h"
 #include "httprpc.h"
 #include "key.h"
-#include "notarisationdb.h"
 #include "key_io.h"
 #include "main.h"
 #include "metrics.h"
@@ -248,8 +247,6 @@ void Shutdown()
         pcoinsdbview = NULL;
         delete pblocktree;
         pblocktree = NULL;
-        delete pnotarisations;
-        pnotarisations = nullptr;
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -1848,13 +1845,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 delete pcoinsdbview;
                 delete pcoinscatcher;
                 delete pblocktree;
-                delete pnotarisations;
 
                 pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
                 pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
                 pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
                 pcoinsTip = new CCoinsViewCache(pcoinscatcher);
-                pnotarisations = new NotarisationDB(100*1024*1024, false, fReindex);
 
 
                 if (fReindex) {

@@ -44,7 +44,6 @@
 static bool fDaemon;
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-void komodo_passport_iteration();
 int32_t komodo_longestchain();
 UniValue closeoffers(const UniValue& params, bool fHelp);
 
@@ -55,17 +54,9 @@ void WaitForShutdown(boost::thread_group* threadGroup)
     // Tell the main threads to shutdown.
     while (!fShutdown)
     {
-        //fprintf(stderr,"call passport iteration\n");
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        {
-            komodo_passport_iteration();
-            MilliSleep(10000);
-        }
-        else
-        {
-            komodo_longestchain();
-            MilliSleep(20000);
-        }
+        komodo_longestchain();
+        MilliSleep(20000);
+
         // attempt to close any open offers every 5 minutes
         if (pwalletMain &&
             ((GetTimeMillis() / 1000) - curTimeSec) > 300 &&
@@ -98,7 +89,6 @@ void WaitForShutdown(boost::thread_group* threadGroup)
 extern int32_t IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,ASSETCHAIN_INIT;
 extern std::string NOTARY_PUBKEY;
 int32_t komodo_is_issuer();
-void komodo_passport_iteration();
 
 bool AppInit(int argc, char* argv[])
 {
@@ -144,7 +134,6 @@ bool AppInit(int argc, char* argv[])
         while ( ASSETCHAIN_INIT == 0 )
         {
             //if ( komodo_is_issuer() != 0 )
-            //    komodo_passport_iteration();
             #ifdef _WIN32
             boost::this_thread::sleep_for(boost::chrono::seconds(1));
             #else

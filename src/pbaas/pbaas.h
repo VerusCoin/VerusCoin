@@ -63,6 +63,7 @@ static const uint32_t PBAAS_CHIPS_NOTARIZATION_FIX_UPGRADE = 1741798800; // GMT:
 static const uint32_t PBAAS_ALLCHAINS_NOTARIZATION_FIX_UPGRADE = 1743440400; // GMT: Monday, March 31, 2025 5:00:00 PM
 static const uint32_t PBAAS_ALLCHAINS_NOTARIZATION_FIX_TESTNET_UPGRADE = 1741798800; // GMT: Wednesday, March 12, 2025 5:00:00 PM
 static const uint32_t PBAAS_STRICT_PRECONVERT_HEIGHT = 3931100;
+static const uint32_t PBAAS_REFUND_KAIJU_HEIGHT = 3448494;
 
 class CUpgradeDescriptor
 {
@@ -1263,6 +1264,7 @@ public:
     bool IsUpgrade02Active(int64_t height=0) const;
     bool IsPBaaSRefundFixActive(int64_t height=0) const;
     bool IsPBaaSNotarizationFix01Active(int64_t height) const;
+    bool ShouldRefundDeFi(uint32_t height, const uint160 &currencyID) const;
 
     uint32_t GetChainBranchId(const uint160 &sysID, int nHeight, const Consensus::Params& params) const;
 

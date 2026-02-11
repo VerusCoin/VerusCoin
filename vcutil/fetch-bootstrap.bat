@@ -17,7 +17,7 @@ IF %TAR_FOUND% EQU 1 (
 )
 SET BOOTSTRAP_PACKAGE_SIG=!BOOTSTRAP_PACKAGE!.verusid
 SET BLOCKCHAIN_DATA_FILES=fee_estimates.dat, komodostate, komodostate.ind, peers.dat, db.log, debug.log, signedmasks
-SET BLOCKCHAIN_DATA_DIRS=blocks, chainstate, database, notarisations
+SET BLOCKCHAIN_DATA_DIRS=blocks, chainstate, database
 
 CALL :MAIN
 

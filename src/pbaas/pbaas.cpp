@@ -1224,7 +1224,7 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                 {
                     return state.Error("Invalid import notarization mutation\n");
                 }
-                if (ConnectedChains.ShouldForceRefundDeFi(checkHeight, notarization.currencyID))
+                if (ConnectedChains.ShouldForceRefundDeFi(notarization.notarizationHeight, notarization.currencyID))
                 {
                     checkNotarization = notarization;
                 }
@@ -6864,11 +6864,9 @@ uint32_t CConnectedChains::GetChainBranchId(const uint160 &sysID, int height, co
 
 bool CConnectedChains::ShouldForceRefundDeFi(uint32_t height, const uint160 &currencyID) const
 {
-    return (_IsVerusActive() &&
-                !PBAAS_TESTMODE &&
-                (height == PBAAS_REFUND_KAIJU_HEIGHT ||
-                 height == (PBAAS_REFUND_KAIJU_HEIGHT - 1)) &&
-                currencyID == KaijuCurrencyID()) ? true : false;
+    bool inRange = (height >= (PBAAS_REFUND_KAIJU_HEIGHT1 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT1 + 1))) ||
+                   (height >= (PBAAS_REFUND_KAIJU_HEIGHT2 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT2 + 1)));
+    return (_IsVerusActive() && !PBAAS_TESTMODE && inRange && currencyID == KaijuCurrencyID()) ? true : false;
 }
 
 bool CConnectedChains::ConfigureEthBridge(bool callToCheck)

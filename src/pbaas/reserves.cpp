@@ -2049,6 +2049,10 @@ std::vector<CAmount> CCurrencyState::ConvertAmounts(const std::vector<CAmount> &
 
     bool haveConversion = false;
 
+    // generally an overflow will cause a fail, which will result in leaving the _newState parameter untouched, making it
+    // possible to check if it is invalid as an overflow or formula failure check
+    bool failed = false;
+
     if (inputReserves.size() == inputFractional.size() && inputReserves.size() == numCurrencies &&
         (!pCrossConversions || pCrossConversions->size() == numCurrencies))
     {
@@ -2082,43 +2086,44 @@ std::vector<CAmount> CCurrencyState::ConvertAmounts(const std::vector<CAmount> &
                 }
             }
         }
+        else
+        {
+            failed = true;
+        }
     }
     else
     {
-        printf("%s: invalid parameters\n", __func__);
-        LogPrintf("%s: invalid parameters\n", __func__);
-        return initialRates;
+        failed = true;
     }
 
-    if (!haveConversion)
+    if (!failed && !haveConversion)
     {
         // not considered an error
         _newState = newState;
         return initialRates;
     }
 
-    // generally an overflow will cause a fail, which will result in leaving the _newState parameter untouched, making it
-    // possible to check if it is invalid as an overflow or formula failure check
-    bool failed = false;
-
-    for (auto oneIn : inputReserves)
+    if (!failed)
     {
-        if (oneIn < 0)
+        for (auto oneIn : inputReserves)
         {
-            failed = true;
-            printf("%s: invalid reserve input amount for conversion %" PRId64 "\n", __func__, oneIn);
-            LogPrintf("%s: invalid reserve input amount for conversion %" PRId64 "\n", __func__, oneIn);
-            break;
+            if (oneIn < 0)
+            {
+                failed = true;
+                printf("%s: invalid reserve input amount for conversion %" PRId64 "\n", __func__, oneIn);
+                LogPrintf("%s: invalid reserve input amount for conversion %" PRId64 "\n", __func__, oneIn);
+                break;
+            }
         }
-    }
-    for (auto oneIn : inputFractional)
-    {
-        if (oneIn < 0)
+        for (auto oneIn : inputFractional)
         {
-            failed = true;
-            printf("%s: invalid fractional input amount for conversion %" PRId64 "\n", __func__, oneIn);
-            LogPrintf("%s: invalid fractional input amount for conversion %" PRId64 "\n", __func__, oneIn);
-            break;
+            if (oneIn < 0)
+            {
+                failed = true;
+                printf("%s: invalid fractional input amount for conversion %" PRId64 "\n", __func__, oneIn);
+                LogPrintf("%s: invalid fractional input amount for conversion %" PRId64 "\n", __func__, oneIn);
+                break;
+            }
         }
     }
 
@@ -2401,8 +2406,20 @@ std::vector<CAmount> CCurrencyState::ConvertAmounts(const std::vector<CAmount> &
         for (auto &id : layer.second.second)
         {
             auto idIT = fractionalInMap.find(id);
-            CAmount newReservesForCurrencyBB = ((arith_uint256(newNormalizedReserveBB) * arith_uint256(weights[reserveMap[id]])) / bigLayerWeight).GetLow64();
-            CAmount newReservesForCurrencyAB = ((arith_uint256(newNormalizedReserveAB) * arith_uint256(weights[reserveMap[id]])) / bigLayerWeight).GetLow64();
+
+            CAmount newReservesForCurrencyBB = ((arith_uint256(newNormalizedReserveBB < 0 ? -newNormalizedReserveBB : newNormalizedReserveBB) *
+                                                    arith_uint256(weights[reserveMap[id]])) / bigLayerWeight).GetLow64();
+            CAmount newReservesForCurrencyAB = ((arith_uint256(newNormalizedReserveAB < 0 ? -newNormalizedReserveAB : newNormalizedReserveAB) *
+                                                    arith_uint256(weights[reserveMap[id]])) / bigLayerWeight).GetLow64();
+
+            if (newNormalizedReserveBB < 0)
+            {
+                newReservesForCurrencyBB = -newReservesForCurrencyBB;
+            }
+            if (newNormalizedReserveAB < 0)
+            {
+                newReservesForCurrencyAB = -newReservesForCurrencyAB;
+            }
 
             // initialize or add to the new supply for this currency
             if (idIT == fractionalInMap.end())
@@ -3221,6 +3238,11 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                             flags &= ~IS_VALID;
                             flags |= IS_REJECT;
                             return;
+                        }
+
+                        if (ConnectedChains.ShouldForceRefundDeFi(nHeight, newState.currencyID))
+                        {
+                            newState = importNotarization.currencyState;
                         }
 
                         if (importNotarization.currencyState.flags != newState.flags)
@@ -4281,6 +4303,9 @@ bool CReserveTransactionDescriptor::AddReserveTransferImportOutputs(const CCurre
         LogPrintf("%s: systemSource import %s is not from either gateway, PBaaS chain, or other system level currency\n", __func__, systemSource.name.c_str());
         return false;
     }
+
+    bool refundDeFi = ConnectedChains.ShouldForceRefundDeFi(height, importCurrencyID);
+
     bool isCrossSystemImport = nativeSourceCurrencyID != nativeDestCurrencyID;
 
     nativeIn = 0;
@@ -4339,7 +4364,8 @@ bool CReserveTransactionDescriptor::AddReserveTransferImportOutputs(const CCurre
                                            importCurrencyID,
                                            feeRecipient);
         }
-        else if (importCurrencyState.IsRefunding() ||
+        else if (refundDeFi ||
+                 importCurrencyState.IsRefunding() ||
                  exportObjects[i].IsRefund() ||
                  (exportObjects[i].IsPreConversion() && importCurrencyState.IsLaunchCompleteMarker()) ||
                  (importCurrencyState.GetID() != VERUS_CHAINID &&

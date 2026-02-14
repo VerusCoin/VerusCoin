@@ -280,7 +280,7 @@ UniValue generate(const UniValue& params, bool fHelp)
                 LOCK(cs_main);
                 pblock->nSolution = soln;
                 solutionTargetChecks.increment();
-                return CheckProofOfWork(*pblock,NOTARY_PUBKEY33,chainActive.Height(),Params().GetConsensus());
+                return CheckProofOfWork(*pblock, chainActive.Height(), Params().GetConsensus());
             };
             bool found = EhBasicSolveUncancellable(n, k, curr_state, validBlock);
             ehSolverRuns.increment();

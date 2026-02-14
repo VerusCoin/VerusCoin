@@ -324,7 +324,6 @@ libbitcoin_server_a_SOURCES = \
   miner.cpp \
   net.cpp \
   noui.cpp \
-  notarisationdb.cpp \
 	params.cpp \
   pbaas/identity.cpp \
   pbaas/notarization.cpp \

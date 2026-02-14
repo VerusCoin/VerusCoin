@@ -259,7 +259,7 @@ EOF
     set_data_dir
   fi
   data_files=("fee_estimates.dat" "komodostate" "komodostate.ind" "peers.dat" "db.log" "debug.log" "signedmasks")
-  data_dirs=("blocks" "chainstate" "database" "notarisations")
+  data_dirs=("blocks" "chainstate" "database")
   vrsc_data=()
   if ! [ -d "${V_CHAIN_DATA_DIR}" ]; then
     echo "making dir ${V_CHAIN_DATA_DIR}"

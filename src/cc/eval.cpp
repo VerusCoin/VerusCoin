@@ -155,66 +155,6 @@ bool Eval::GetBlock(uint256 hash, CBlockIndex& blockIdx) const
     return false;
 }
 
-extern int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
-
-
-int32_t Eval::GetNotaries(uint8_t pubkeys[64][33], int32_t height, uint32_t timestamp) const
-{
-    return komodo_notaries(pubkeys, height, timestamp);
-}
-
-
-bool Eval::CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t timestamp) const
-{
-    if (tx.vin.size() < 11) return false;
-
-    uint8_t seenNotaries[64] = {0};
-    uint8_t notaries[64][33];
-    int nNotaries = GetNotaries(notaries, height, timestamp);
-
-    BOOST_FOREACH(const CTxIn &txIn, tx.vin)
-    {
-        // Get notary pubkey
-        CTransaction tx;
-        uint256 hashBlock;
-        if (!GetTxUnconfirmed(txIn.prevout.hash, tx, hashBlock)) return false;
-        if (tx.vout.size() < txIn.prevout.n) return false;
-        CScript spk = tx.vout[txIn.prevout.n].scriptPubKey;
-        if (spk.size() != 35) return false;
-        std::vector<unsigned char> scriptVec = std::vector<unsigned char>(spk.begin(),spk.end());
-        const unsigned char *pk = scriptVec.data();
-        if (pk++[0] != 33) return false;
-        if (pk[33] != OP_CHECKSIG) return false;
-
-        // Check it's a notary
-        for (int i=0; i<nNotaries; i++) {
-            if (!seenNotaries[i]) {
-                if (memcmp(pk, notaries[i], 33) == 0) {
-                    seenNotaries[i] = 1;
-                    goto found;
-                }
-            }
-        }
-        return false;
-        found:;
-    }
-
-    return true;
-}
-
-/*
- * Notarisation data, ie, OP_RETURN payload in notarisation transactions
- */
-bool ParseNotarisationOpReturn(const CTransaction &tx, NotarisationData &data)
-{
-    if (tx.vout.size() < 2) return false;
-    std::vector<unsigned char> vdata;
-    if (!GetOpReturnData(tx.vout[1].scriptPubKey, vdata)) return false;
-    bool out = E_UNMARSHAL(vdata, ss >> data);
-    return out;
-}
-
-
 /*
  * Misc
  */

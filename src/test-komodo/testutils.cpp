@@ -6,7 +6,6 @@
 #include "key.h"
 #include "main.h"
 #include "miner.h"
-#include "notarisationdb.h"
 #include "random.h"
 #include "rpc/server.h"
 #include "rpc/protocol.h"
@@ -33,8 +32,10 @@ CKey notaryKey;
  */
 int64_t nMockTime;
 
-extern uint32_t USE_EXTERNAL_PUBKEY;
+extern int32_t USE_EXTERNAL_PUBKEY;
 extern std::string NOTARY_PUBKEY;
+#define KOMODO_ASSETCHAIN_MAXLEN 65
+extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 
 void setupChain()
 {
@@ -61,7 +62,6 @@ void setupChain()
     pblocktree = new CBlockTreeDB(1 << 20, true);
     CCoinsViewDB *pcoinsdbview = new CCoinsViewDB(1 << 23, true);
     pcoinsTip = new CCoinsViewCache(pcoinsdbview);
-    pnotarisations = new NotarisationDB(1 << 20, true);
     InitBlockIndex(Params());
 }
 

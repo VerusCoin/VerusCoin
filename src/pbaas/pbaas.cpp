@@ -1205,9 +1205,10 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                     pbn.currencyState.SetLaunchCompleteMarker(false);
                 }
 
+                uint32_t checkHeight = ccx.sourceHeightStart ? ccx.sourceHeightStart - 1 : 0;
                 if (!pbn.NextNotarizationInfo(sourceSystem,
                                                 importingToDef,
-                                                ccx.sourceHeightStart ? ccx.sourceHeightStart - 1 : 0,
+                                                checkHeight,
                                                 notarization.notarizationHeight,
                                                 reserveTransfers,
                                                 transferHash,
@@ -1223,6 +1224,11 @@ bool PrecheckCrossChainImport(const CTransaction &tx, int32_t outNum, CValidatio
                 {
                     return state.Error("Invalid import notarization mutation\n");
                 }
+                if (ConnectedChains.ShouldForceRefundDeFi(notarization.notarizationHeight, notarization.currencyID))
+                {
+                    checkNotarization = notarization;
+                }
+
                 if (ccx.IsClearLaunch())
                 {
                     checkNotarization.SetLaunchComplete();
@@ -3834,7 +3840,10 @@ uint32_t CCurrencyDefinition::MagicNumber() const
     uint32_t crc0 = 0;
     bits256 hash;
 
-    LogPrint("magicnumber", "hashing buffer: %s\n", HexBytes(&extraBuffer[0], extraBuffer.size()).c_str());
+    if (extraBuffer.size())
+    {
+        LogPrint("magicnumber", "hashing buffer: %s\n", HexBytes(&extraBuffer[0], extraBuffer.size()).c_str());
+    }
 
     iguana_rwnum(1, &crcHeader[0], sizeof(supply), (void *)&supply);
     memcpy(&(crcHeader[sizeof(supply)]), currencyName.c_str(), nameLen);
@@ -6853,6 +6862,13 @@ uint32_t CConnectedChains::GetChainBranchId(const uint160 &sysID, int height, co
     return !IsVerusMainnetActive() || height > fixHeight ? NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId : CurrentEpochBranchId(height, params);
 }
 
+bool CConnectedChains::ShouldForceRefundDeFi(uint32_t height, const uint160 &currencyID) const
+{
+    bool inRange = (height >= (PBAAS_REFUND_KAIJU_HEIGHT1 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT1 + 1))) ||
+                   (height >= (PBAAS_REFUND_KAIJU_HEIGHT2 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT2 + 1)));
+    return (_IsVerusActive() && !PBAAS_TESTMODE && inRange && currencyID == KaijuCurrencyID()) ? true : false;
+}
+
 bool CConnectedChains::ConfigureEthBridge(bool callToCheck)
 {
     // first time through, we initialize the VETH gateway config file
@@ -7045,7 +7061,9 @@ CCoinbaseCurrencyState CConnectedChains::AddPendingConversions(CCurrencyDefiniti
                                                                int32_t curDefHeight,
                                                                const std::vector<CReserveTransfer> &extraConversions)
 {
-    if (curDef.launchSystemID == ASSETCHAINS_CHAINID && fromHeight < curDef.startBlock)
+    if (curDef.launchSystemID == ASSETCHAINS_CHAINID && (fromHeight < (curDef.startBlock - 1) || 
+                                                         !_lastNotarization.currencyState.IsLaunchConfirmed() ||
+                                                         !_lastNotarization.currencyState.IsLaunchCompleteMarker()))
     {
         return AddPrelaunchConversions(curDef, _lastNotarization.currencyState, fromHeight, height, curDefHeight, extraConversions);
     }

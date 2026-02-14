@@ -209,7 +209,6 @@ std::vector<std::string> CVDXF::ParseSubNames(const std::string &Name, std::stri
     {
         addVerus = false;
         retNames.pop_back();
-        nameCopy.pop_back();
     }
 
     int numRetNames = retNames.size();

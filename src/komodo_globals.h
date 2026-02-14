@@ -18,18 +18,10 @@
 
 void komodo_prefetch(FILE *fp);
 uint32_t komodo_heightstamp(int32_t height);
-void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotaries,uint8_t notaryid,uint256 txhash,uint64_t voutmask,uint8_t numvouts,uint32_t *pvals,uint8_t numpvals,int32_t kheight,uint32_t ktime,uint64_t opretvalue,uint8_t *opretbuf,uint16_t opretlen,uint16_t vout,uint256 MoM,int32_t MoMdepth);
 void komodo_init(int32_t height);
-int32_t komodo_MoMdata(int32_t *notarized_htp,uint256 *MoMp,uint256 *kmdtxidp,int32_t nHeight,uint256 *MoMoMp,int32_t *MoMoMoffsetp,int32_t *MoMoMdepthp,int32_t *kmdstartip,int32_t *kmdendip);
-int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
 char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port);
 void komodo_init(int32_t height);
-int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp);
-int32_t komodo_isrealtime(int32_t *kmdheightp);
-uint64_t komodo_paxtotal();
 int32_t komodo_longestchain();
-uint64_t komodo_maxallowed(int32_t baseid);
-int32_t komodo_bannedset(int32_t *indallvoutsp,uint256 *array,int32_t max);
 
 pthread_mutex_t komodo_mutex;
 
@@ -40,9 +32,7 @@ struct pax_transaction *PAX;
 int32_t NUM_PRICES; uint32_t *PVALS;
 struct knotaries_entry *Pubkeys;
 
-struct komodo_state KOMODO_STATES[34];
-
-int32_t KOMODO_MININGTHREADS = 0,IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_EXTERNAL_NOTARIES,KOMODO_PASSPORT_INITDONE,KOMODO_PAX,KOMODO_EXCHANGEWALLET,KOMODO_REWIND,KOMODO_CONNECTING = -1;
+int32_t KOMODO_MININGTHREADS = 0,IS_KOMODO_NOTARY,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_EXTERNAL_NOTARIES,KOMODO_PASSPORT_INITDONE,KOMODO_PAX,KOMODO_EXCHANGEWALLET,KOMODO_REWIND,KOMODO_CONNECTING = -1;
 int32_t KOMODO_INSYNC,KOMODO_LASTMINED,prevKOMODO_LASTMINED,KOMODO_CCACTIVATE,JUMBLR_PAUSE = 1;
 std::string NOTARY_PUBKEY,ASSETCHAINS_NOTARIES,ASSETCHAINS_OVERRIDE_PUBKEY,DONATION_PUBKEY;
 uint8_t NOTARY_PUBKEY33[33],ASSETCHAINS_OVERRIDE_PUBKEY33[33],ASSETCHAINS_PUBLIC,ASSETCHAINS_PRIVATE;

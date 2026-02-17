@@ -14658,7 +14658,6 @@ UniValue registernamecommitment(const UniValue& params, bool fHelp)
 
     bool success = false;
     std::vector<CRecipient> newInputs;
-    CTxDestination changeDest;
 
     std::vector<CTxDestination> dests({dest});
     int requiredSigs = 1;
@@ -14804,16 +14803,23 @@ UniValue registernamecommitment(const UniValue& params, bool fHelp)
     else if (sourceDest.which() != COptCCParams::ADDRTYPE_INVALID && !GetDestinationID(sourceDest).IsNull())
     {
         tb.SendChangeTo(sourceDest);
-        changeDest = sourceDest;
+    }
+    else if (dest.which() == COptCCParams::ADDRTYPE_ID)
+    {
+        LOCK(pwalletMain->cs_wallet);
+        std::pair<CIdentityMapKey, CIdentityMapValue> keyAndIdentity;
+        if (pwalletMain->GetIdentity(GetDestinationID(dest), keyAndIdentity) && keyAndIdentity.first.CanSpend())
+        {
+            tb.SendChangeTo(dest);
+        }
     }
     else
     {
-        if (dest.which() == COptCCParams::ADDRTYPE_ID)
+        LOCK(pwalletMain->cs_wallet);
+        if (pwalletMain->HaveKey(GetDestinationID(dest)))
         {
-
+            tb.SendChangeTo(dest);
         }
-        tb.SendChangeTo(dest);
-        changeDest = dest;
     }
 
     TransactionBuilderResult preResult = tb.Build();

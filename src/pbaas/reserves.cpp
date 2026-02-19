@@ -1946,7 +1946,7 @@ CAmount CalculateReserveOut(CAmount FractionalIn, CAmount Supply, CAmount Normal
 
         if (!CCurrencyState::to_int64(reserveout, reserveOut))
         {
-            assert(false);
+            return -1;
         }
     }
     return reserveOut;
@@ -2397,6 +2397,21 @@ std::vector<CAmount> CCurrencyState::ConvertAmounts(const std::vector<CAmount> &
 
         CAmount newNormalizedReserveBB = CalculateReserveOut(layer.second.first, supply + addSupply, layerFixActive ? totalLayerReservesBB : totalLayerReservesBB + addNormalizedReservesBB, layer.first);
         CAmount newNormalizedReserveAB = CalculateReserveOut(layer.second.first, supplyAfterBuy + addSupply, layerFixActive ? totalLayerReservesAB : totalLayerReservesAB + addNormalizedReservesAB, layer.first);
+
+        if (newNormalizedReserveBB == -1)
+        {
+            printf("%s: newNormalizedReserveBB < 0\n", __func__);
+            DumpConvertData(_inputReserves, _inputFractional, _newState, pCrossConversions, pViaPrices);
+            state.Error(std::string(__func__) + " newNormalizedReserveBB < 0");
+            return initialRates;
+        }
+        if (newNormalizedReserveAB == -1)
+        {
+            printf("%s: newNormalizedReserveAB < 0\n", __func__);
+            DumpConvertData(_inputReserves, _inputFractional, _newState, pCrossConversions, pViaPrices);
+            state.Error(std::string(__func__) + " newNormalizedReserveAB < 0");
+            return initialRates;
+        }
 
         // input fractional is burned and output reserves are removed from reserves
         addSupply -= layer.second.first;

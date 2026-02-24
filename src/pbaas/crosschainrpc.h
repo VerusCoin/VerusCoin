@@ -24,6 +24,20 @@
 #include "pbaas/vdxf.h"
 #include "utilstrencodings.h"
 
+#ifndef __GLIBCXX__
+#include "pbaas/shuffle_compat.h"
+#endif
+
+template<typename RAIterator, typename RNG>
+void pbaas_shuffle(RAIterator first, RAIterator last, RNG&& rng)
+{
+#ifdef __GLIBCXX__
+    std::shuffle(first, last, rng);
+#else
+    gcc_compatible_shuffle(first, last, rng);
+#endif
+}
+
 static const int DEFAULT_RPC_TIMEOUT=900;
 static const uint32_t PBAAS_VERSION = 1;
 static const uint32_t PBAAS_VERSION_INVALID = 0;
@@ -1801,15 +1815,5 @@ enum PBAAS_SERVICE_TYPES {
     SERVICE_NOTARIZATION = 1,
     SERVICE_LAST = 1
 };
-
-template<typename RAIterator, typename RNG>
-void pbaas_shuffle(RAIterator first, RAIterator last, RNG&& rng)
-{
-#ifdef __GLIBCXX__
-    std::shuffle(first, last, rng);
-#else
-    gcc_compatible_shuffle(first, last, rng);
-#endif
-}
 
 #endif

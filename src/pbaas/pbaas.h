@@ -314,7 +314,7 @@ public:
 
     inline static int32_t NotarizationsBeforeModuloExtension()
     {
-        return MIN_EARNED_FOR_AUTO << (1 + MIN_EARNED_FOR_AUTO);
+        return MIN_EARNED_FOR_AUTO << 1 + MIN_EARNED_FOR_AUTO;
     }
 
     static int32_t GetAdjustedNotarizationModuloExp(int64_t notarizationBlockModulo,

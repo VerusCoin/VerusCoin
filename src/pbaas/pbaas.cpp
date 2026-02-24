@@ -11747,7 +11747,7 @@ void CConnectedChains::SubmissionThread()
                                 uint256 prHash = hw.GetHash();
                                 std::vector<uint160> notaryVec = notaryCurrency.notaries;
                                 auto prandom = std::minstd_rand0(UintToArith256(prHash).GetLow64());
-                                shuffle(notaryVec.begin(), notaryVec.end(), prandom);
+                                pbaas_shuffle(notaryVec.begin(), notaryVec.end(), prandom);
                                 if (notaryVec[0] != VERUS_NOTARYID)
                                 {
                                     LogPrintf("skipping import submission - was not selected for submission lottery, %s selected\n", EncodeDestination(CIdentityID(notaryVec[0])).c_str());
@@ -11779,7 +11779,7 @@ void CConnectedChains::SubmissionThread()
                                     uint256 prHash = hw.GetHash();
                                     std::vector<uint160> notaryVec = notaryCurrency.notaries;
                                     auto prandom = std::minstd_rand0(UintToArith256(prHash).GetLow64());
-                                    shuffle(notaryVec.begin(), notaryVec.end(), prandom);
+                                    pbaas_shuffle(notaryVec.begin(), notaryVec.end(), prandom);
                                     if (notaryVec[0] != VERUS_NOTARYID)
                                     {
                                         LogPrintf("skipping next import submission for #%d of valid exports - was not selected for submission lottery, %s selected\n", i, EncodeDestination(CIdentityID(notaryVec[i])).c_str());

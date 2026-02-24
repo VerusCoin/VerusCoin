@@ -5735,7 +5735,7 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int
     vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue;
     CAmount nTotalLower = 0;
 
-    std::shuffle(vCoins.begin(), vCoins.end(), ZcashRandomEngine());
+    pbaas_shuffle(vCoins.begin(), vCoins.end(), ZcashRandomEngine());
 
     BOOST_FOREACH(const COutput &output, vCoins)
     {
@@ -5990,7 +5990,7 @@ bool CWallet::SelectReserveUTXOs(const CCurrencyValueMap& targetValues,
     std::vector<std::pair<CUTXORef, CCurrencyValueMap>> vOutputsToOptimize;
     std::vector<int> vOutputsToOptimizeIndexes;
 
-    std::shuffle(vCoins.begin(), vCoins.end(), ZcashRandomEngine());
+    pbaas_shuffle(vCoins.begin(), vCoins.end(), ZcashRandomEngine());
 
     CCurrencyValueMap nTotalTarget = targetValues.CanonicalMap();
 

@@ -1802,4 +1802,14 @@ enum PBAAS_SERVICE_TYPES {
     SERVICE_LAST = 1
 };
 
+template<typename RAIterator, typename RNG>
+void pbaas_shuffle(RAIterator first, RAIterator last, RNG&& rng)
+{
+#ifdef __GLIBCXX__
+    std::shuffle(first, last, rng);
+#else
+    gcc_compatible_shuffle(first, last, rng);
+#endif
+}
+
 #endif

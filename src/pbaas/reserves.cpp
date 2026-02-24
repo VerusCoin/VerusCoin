@@ -6762,7 +6762,7 @@ CCoinbaseCurrencyState &CCoinbaseCurrencyState::UpdateWithEmission(CAmount toEmi
             }
 
             // distribute the extra as evenly as possible
-            std::shuffle(extraWeight.begin(), extraWeight.end(), prandom);
+            pbaas_shuffle(extraWeight.begin(), extraWeight.end(), prandom);
             for (int i = 0; i < weights.size(); i++)
             {
                 weights[i] -= extraWeight[i];
@@ -6841,7 +6841,7 @@ CCoinbaseCurrencyState &CCoinbaseCurrencyState::ApplyCarveouts(int32_t carveOut)
                 }
             }
             // distribute the extra weight loss as evenly as possible
-            std::shuffle(extraWeight.begin(), extraWeight.end(), prandom);
+            pbaas_shuffle(extraWeight.begin(), extraWeight.end(), prandom);
             for (int i = 0; i < weights.size(); i++)
             {
                 weights[i] -= extraWeight[i];

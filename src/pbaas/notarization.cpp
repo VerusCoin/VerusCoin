@@ -9848,7 +9848,7 @@ std::vector<uint256> CPBaaSNotarization::SubmitFinalizedNotarizations(const CRPC
         uint256 prHash = hw.GetHash();
         std::vector<uint160> notaryVec = externalSystem.chainDefinition.notaries;
         auto prandom = std::minstd_rand0(UintToArith256(prHash).GetLow64());
-        shuffle(notaryVec.begin(), notaryVec.end(), prandom);
+        pbaas_shuffle(notaryVec.begin(), notaryVec.end(), prandom);
         if (notaryVec[0] != VERUS_NOTARYID)
         {
             LogPrintf("skipping notarization submission - was not selected for submission lottery (%s selected)\n", EncodeDestination(CIdentityID(notaryVec[0])).c_str());

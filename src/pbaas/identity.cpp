@@ -3280,7 +3280,7 @@ bool ValidateIdentityRecover(struct CCcontract_info *cp, Eval* eval, const CTran
             smartSigs = CSmartTransactionSignatures(std::vector<unsigned char>(ffVec.begin(), ffVec.end()));
 
             CIdentity recoveryIdentity = oldIdentity.recoveryAuthority == identityID ? oldIdentity : CIdentity::LookupIdentity(oldIdentity.recoveryAuthority, height);
-            CIdentity revocationIdentity = oldIdentity.revocationAuthority == identityID ? oldIdentity : CIdentity::LookupIdentity(oldIdentity.recoveryAuthority, height);
+            CIdentity revocationIdentity = oldIdentity.revocationAuthority == identityID ? oldIdentity : CIdentity::LookupIdentity(oldIdentity.revocationAuthority, height);
 
             std::set<CTxDestination> recoverySigDests = recoveryIdentity.IdentityPrimaryAddressKeySet();
             std::set<CTxDestination> revocationSigDests = revocationIdentity.IdentityPrimaryAddressKeySet();

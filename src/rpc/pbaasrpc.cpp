@@ -528,6 +528,15 @@ bool SetThisChain(const UniValue &chainDefinition, CCurrencyDefinition *retDef)
     mapArgs["-ac_supply"] = to_string(ASSETCHAINS_SUPPLY);
     mapArgs["-gatewayconverterissuance"] = to_string(ASSETCHAINS_ISSUANCE);
 
+    // default to opt-out contract upgrade if this is non-testnet Verus and there is no "-approvecontractupgrade" set
+    if (!PBAAS_TESTMODE && ASSETCHAINS_CHAINID == VERUS_CHAINID && !mapArgs.count("-approvecontractupgrade"))
+    {
+        auto upgradeContractAddress = CTransferDestination::DecodeEthDestination("0x9df9bffc3fc1b85f0edab3284f8266c4b939aea8");
+        if (!upgradeContractAddress.IsNull())
+        {
+            APPROVE_CONTRACT_UPGRADE = CTransferDestination(CTransferDestination::DEST_ETH, ::AsVector(upgradeContractAddress));
+        }
+    }
     return true;
 }
 

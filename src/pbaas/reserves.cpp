@@ -2888,9 +2888,19 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                 case EVAL_IDENTITY_COMMITMENT:
                 {
                     flags |= IS_COMMITMENT;
+                    CCommitmentHash ch;
+                    if (p.vData.size() && (ch = CCommitmentHash(p.vData[0])).IsValid())
+                    {
+                        for (auto &oneCur : ch.reserveValues.valueMap)
+                        {
+                            if (oneCur.first != ASSETCHAINS_CHAINID && oneCur.second)
+                            {
+                                AddReserveOutput(oneCur.first, oneCur.second);
+                            }
+                        }
+                    }
                 }
                 break;
-
 
                 case EVAL_IDENTITY_RESERVATION:
                 case EVAL_IDENTITY_ADVANCEDRESERVATION:

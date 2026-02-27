@@ -1946,7 +1946,7 @@ CAmount CalculateReserveOut(CAmount FractionalIn, CAmount Supply, CAmount Normal
 
         if (!CCurrencyState::to_int64(reserveout, reserveOut))
         {
-            assert(false);
+            return -1;
         }
     }
     return reserveOut;
@@ -2397,6 +2397,21 @@ std::vector<CAmount> CCurrencyState::ConvertAmounts(const std::vector<CAmount> &
 
         CAmount newNormalizedReserveBB = CalculateReserveOut(layer.second.first, supply + addSupply, layerFixActive ? totalLayerReservesBB : totalLayerReservesBB + addNormalizedReservesBB, layer.first);
         CAmount newNormalizedReserveAB = CalculateReserveOut(layer.second.first, supplyAfterBuy + addSupply, layerFixActive ? totalLayerReservesAB : totalLayerReservesAB + addNormalizedReservesAB, layer.first);
+
+        if (newNormalizedReserveBB == -1)
+        {
+            printf("%s: newNormalizedReserveBB < 0\n", __func__);
+            DumpConvertData(_inputReserves, _inputFractional, _newState, pCrossConversions, pViaPrices);
+            state.Error(std::string(__func__) + " newNormalizedReserveBB < 0");
+            return initialRates;
+        }
+        if (newNormalizedReserveAB == -1)
+        {
+            printf("%s: newNormalizedReserveAB < 0\n", __func__);
+            DumpConvertData(_inputReserves, _inputFractional, _newState, pCrossConversions, pViaPrices);
+            state.Error(std::string(__func__) + " newNormalizedReserveAB < 0");
+            return initialRates;
+        }
 
         // input fractional is burned and output reserves are removed from reserves
         addSupply -= layer.second.first;
@@ -2873,9 +2888,19 @@ CReserveTransactionDescriptor::CReserveTransactionDescriptor(const CTransaction 
                 case EVAL_IDENTITY_COMMITMENT:
                 {
                     flags |= IS_COMMITMENT;
+                    CCommitmentHash ch;
+                    if (p.vData.size() && (ch = CCommitmentHash(p.vData[0])).IsValid())
+                    {
+                        for (auto &oneCur : ch.reserveValues.valueMap)
+                        {
+                            if (oneCur.first != ASSETCHAINS_CHAINID && oneCur.second)
+                            {
+                                AddReserveOutput(oneCur.first, oneCur.second);
+                            }
+                        }
+                    }
                 }
                 break;
-
 
                 case EVAL_IDENTITY_RESERVATION:
                 case EVAL_IDENTITY_ADVANCEDRESERVATION:
@@ -6747,7 +6772,7 @@ CCoinbaseCurrencyState &CCoinbaseCurrencyState::UpdateWithEmission(CAmount toEmi
             }
 
             // distribute the extra as evenly as possible
-            std::shuffle(extraWeight.begin(), extraWeight.end(), prandom);
+            pbaas_shuffle(extraWeight.begin(), extraWeight.end(), prandom);
             for (int i = 0; i < weights.size(); i++)
             {
                 weights[i] -= extraWeight[i];
@@ -6826,7 +6851,7 @@ CCoinbaseCurrencyState &CCoinbaseCurrencyState::ApplyCarveouts(int32_t carveOut)
                 }
             }
             // distribute the extra weight loss as evenly as possible
-            std::shuffle(extraWeight.begin(), extraWeight.end(), prandom);
+            pbaas_shuffle(extraWeight.begin(), extraWeight.end(), prandom);
             for (int i = 0; i < weights.size(); i++)
             {
                 weights[i] -= extraWeight[i];

@@ -1,8 +1,8 @@
 package=zlib
-$(package)_version=1.3.1
+$(package)_version=1.3.2
 $(package)_download_path=https://www.zlib.net/
 $(package)_file_name=$(package)-$($(package)_version).tar.xz
-$(package)_sha256_hash=38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32
+$(package)_sha256_hash=d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3
 
 define $(package)_set_vars
 $(package)_config_opts= CC="$($(package)_cc)"

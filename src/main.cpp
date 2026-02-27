@@ -8863,7 +8863,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         uint64_t num_proc = 0;
         uint64_t num_rate_limit = 0;
-        std::shuffle(vAddr.begin(), vAddr.end(), ZcashRandomEngine());
+        pbaas_shuffle(vAddr.begin(), vAddr.end(), ZcashRandomEngine());
 
         for (CAddress& addr : vAddr)
         {

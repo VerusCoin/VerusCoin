@@ -528,6 +528,15 @@ bool SetThisChain(const UniValue &chainDefinition, CCurrencyDefinition *retDef)
     mapArgs["-ac_supply"] = to_string(ASSETCHAINS_SUPPLY);
     mapArgs["-gatewayconverterissuance"] = to_string(ASSETCHAINS_ISSUANCE);
 
+    // default to opt-out contract upgrade if this is non-testnet Verus and there is no "-approvecontractupgrade" set
+    if (!PBAAS_TESTMODE && ASSETCHAINS_CHAINID == VERUS_CHAINID && !mapArgs.count("-approvecontractupgrade"))
+    {
+        auto upgradeContractAddress = CTransferDestination::DecodeEthDestination("0x9df9bffc3fc1b85f0edab3284f8266c4b939aea8");
+        if (!upgradeContractAddress.IsNull())
+        {
+            APPROVE_CONTRACT_UPGRADE = CTransferDestination(CTransferDestination::DEST_ETH, ::AsVector(upgradeContractAddress));
+        }
+    }
     return true;
 }
 
@@ -14658,7 +14667,6 @@ UniValue registernamecommitment(const UniValue& params, bool fHelp)
 
     bool success = false;
     std::vector<CRecipient> newInputs;
-    CTxDestination changeDest;
 
     std::vector<CTxDestination> dests({dest});
     int requiredSigs = 1;
@@ -14804,16 +14812,23 @@ UniValue registernamecommitment(const UniValue& params, bool fHelp)
     else if (sourceDest.which() != COptCCParams::ADDRTYPE_INVALID && !GetDestinationID(sourceDest).IsNull())
     {
         tb.SendChangeTo(sourceDest);
-        changeDest = sourceDest;
+    }
+    else if (dest.which() == COptCCParams::ADDRTYPE_ID)
+    {
+        LOCK(pwalletMain->cs_wallet);
+        std::pair<CIdentityMapKey, CIdentityMapValue> keyAndIdentity;
+        if (pwalletMain->GetIdentity(GetDestinationID(dest), keyAndIdentity) && keyAndIdentity.first.CanSpend())
+        {
+            tb.SendChangeTo(dest);
+        }
     }
     else
     {
-        if (dest.which() == COptCCParams::ADDRTYPE_ID)
+        LOCK(pwalletMain->cs_wallet);
+        if (pwalletMain->HaveKey(GetDestinationID(dest)))
         {
-
+            tb.SendChangeTo(dest);
         }
-        tb.SendChangeTo(dest);
-        changeDest = dest;
     }
 
     TransactionBuilderResult preResult = tb.Build();

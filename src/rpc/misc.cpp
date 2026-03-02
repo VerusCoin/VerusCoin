@@ -2073,7 +2073,7 @@ UniValue getaddressutxos(const UniValue& params, bool fHelp)
             txnouttype outType;
             std::vector<CTxDestination> addresses;
             int required;
-            if (ExtractDestinations(it->second.script, outType, addresses, required))
+            if (ExtractDestinations(it->second.script, outType, addresses, required, nullptr, nullptr, nullptr, it->second.blockHeight))
             {
                 UniValue addressesUni(UniValue::VARR);
                 for (auto addr : addresses)

@@ -356,7 +356,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-checkblocks=<n>", strprintf(_("How many blocks to check at startup (default: %u, 0 = all)"), 288));
     strUsage += HelpMessageOpt("-checklevel=<n>", strprintf(_("How thorough the block verification of -checkblocks is (0-4, default: %u)"), 3));
     strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), "komodo.conf"));
-    strUsage += HelpMessageOpt("-currencyindex", _("Maintain a currency balance index for fast reserve currency lookups (default: 0)"));
     if (mode == HMM_BITCOIND)
     {
 #if !defined(WIN32)
@@ -384,6 +383,7 @@ std::string HelpMessage(HelpMessageMode mode)
 #endif
     strUsage += HelpMessageGroup(_("Index options:"));
     strUsage += HelpMessageOpt("-addressindex", strprintf(_("Maintain a full address index, used to query for the balance, txids and unspent outputs for addresses (default: %u)"), DEFAULT_ADDRESSINDEX));
+    strUsage += HelpMessageOpt("-currencyindex", strprintf(_("Maintain a currency balance index for fast reserve currency lookups (default: %u)"), 0));
     strUsage += HelpMessageOpt("-idindex", strprintf(_("Maintain a full identity index, enabling queries to select IDs with addresses, revocation or recovery IDs (default: %u)"), 0));
     strUsage += HelpMessageOpt("-timestampindex", strprintf(_("Maintain a timestamp index for block hashes, used to query blocks hashes by a range of timestamps (default: %u)"), DEFAULT_TIMESTAMPINDEX));
     if (showDebug)  

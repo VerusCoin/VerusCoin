@@ -5730,14 +5730,13 @@ UniValue getnotarizationproofs(const UniValue& params, bool fHelp)
                         int loopNum = std::min(std::max(rangeLen, (int)CPBaaSNotarization::EXPECT_MIN_HEADER_PROOFS),
                                               std::min((int)CPBaaSNotarization::MAX_HEADER_PROOFS_PER_PROOF, rangeLen / 10));
 
-                        LogPrintf("oldval: %d, newval: %d\n", std::min(std::max(rangeLen / CPBaaSNotarization::NUM_HEADER_PROOF_RANGE_DIVISOR,
-                                                                    (int)CPBaaSNotarization::EXPECT_MIN_HEADER_PROOFS),
-                                                                    (int)CPBaaSNotarization::MAX_HEADER_PROOFS_PER_PROOF),
-                                                           loopNum);
-
                         uint256 headerSelectionHash = entropyHash;
                         if (LogAcceptCategory("notarization"))
                         {
+                            LogPrintf("oldval: %d, newval: %d\n", std::min(std::max(rangeLen / CPBaaSNotarization::NUM_HEADER_PROOF_RANGE_DIVISOR,
+                                                                        (int)CPBaaSNotarization::EXPECT_MIN_HEADER_PROOFS),
+                                                                        (int)CPBaaSNotarization::MAX_HEADER_PROOFS_PER_PROOF),
+                                                               loopNum);
                             LogPrintf("%s: creating evidence with entropyHash: %s\n", __func__, entropyHash.GetHex().c_str());
                         }
 
@@ -12079,7 +12078,7 @@ UniValue sendcurrency(const UniValue& params, bool fHelp)
                                 }
                                 else
                                 {
-                                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Must provide refund address, have valid \"-defaultid\" set, or have a non-wildcard transparent source when sending via a converter cross chain");
+                                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Must provide \"refundto\" address, have valid \"-defaultid\" set, or have a non-wildcard transparent source when sending via a converter cross chain");
                                 }
                                 dest.SetAuxDest(DestinationToTransferDestination(refundDestination), 0);
                             }

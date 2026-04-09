@@ -442,14 +442,14 @@ bool CCrossChainImport::GetImportInfo(const CTransaction &importTx,
             COptCCParams p;
 
             if (!((pBaseImport->exportTxId.IsNull() ? true : myGetTransaction(pBaseImport->exportTxId, exportTx, hashBlk)) &&
-                pBaseImport->IsDefinitionImport() ||
-                (pBaseImport->exportTxOutNum >= 0 &&
-                exportTx.vout.size() > pBaseImport->exportTxOutNum &&
-                exportTx.vout[pBaseImport->exportTxOutNum].scriptPubKey.IsPayToCryptoCondition(p) &&
-                p.IsValid() &&
-                p.evalCode == EVAL_CROSSCHAIN_EXPORT &&
-                p.vData.size() &&
-                (ccx = CCrossChainExport(p.vData[0])).IsValid())))
+                (pBaseImport->IsDefinitionImport() ||
+                 (pBaseImport->exportTxOutNum >= 0 &&
+                 exportTx.vout.size() > pBaseImport->exportTxOutNum &&
+                 exportTx.vout[pBaseImport->exportTxOutNum].scriptPubKey.IsPayToCryptoCondition(p) &&
+                 p.IsValid() &&
+                 p.evalCode == EVAL_CROSSCHAIN_EXPORT &&
+                 p.vData.size() &&
+                 (ccx = CCrossChainExport(p.vData[0])).IsValid()))))
             {
                 return state.Error(strprintf("%s: cannot retrieve export transaction for import",__func__));
             }

@@ -488,59 +488,66 @@ CIdentity::GetAggregatedIdentityMultimap(const uint160 &idID,
             if (it->first == CVDXF_Data::ContentMultiMapRemoveKey() &&
                 it->second.size())
             {
-                CDataStream ss(it->second, PROTOCOL_VERSION, SER_DISK);
-                uint160 objTypeKey;
-                uint32_t serVersion;
-                size_t serSize;
-                CContentMultiMapRemove removeAction;
+                try
+                {
+                    CDataStream ss(it->second, PROTOCOL_VERSION, SER_DISK);
+                    uint160 objTypeKey;
+                    uint32_t serVersion;
+                    size_t serSize;
+                    CContentMultiMapRemove removeAction;
 
-                ss >> objTypeKey;
-                ss >> VARINT(serVersion);
-                ss >> VARINT(serSize);
-                ss >> removeAction;
+                    ss >> objTypeKey;
+                    ss >> VARINT(serVersion);
+                    ss >> VARINT(serSize);
+                    ss >> removeAction;
 
-                if (objTypeKey != CVDXF_Data::ContentMultiMapRemoveKey() ||
-                    !removeAction.IsValid())
-                {
-                    continue;
-                }
-                if (removeAction.action == removeAction.ACTION_CLEAR_MAP)
-                {
-                    retMap.clear();
-                }
-                else if (removeAction.action == removeAction.ACTION_REMOVE_ALL_KEY)
-                {
-                    retMap.erase(removeAction.entryKey);
-                }
-                else if (removeAction.action == removeAction.ACTION_REMOVE_ALL_KEYVALUE || removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
-                {
-                    // all other actions require referencing specific keyed elements
-                    auto removeItemRange = retMap.equal_range(removeAction.entryKey);
-                    std::vector<std::multimap<uint160,
-                                    std::tuple<std::vector<unsigned char>, uint256, uint32_t, CUTXORef, CPartialTransactionProof>>::iterator>
-                        itemsToRemove;
-                    for (auto removeItemCursor = removeItemRange.first; removeItemCursor != removeItemRange.second; removeItemCursor++)
+                    if (objTypeKey != CVDXF_Data::ContentMultiMapRemoveKey() ||
+                        !removeAction.IsValid())
                     {
-                        CNativeHashWriter hw;
-                        if (std::get<0>(removeItemCursor->second).size())
+                        continue;
+                    }
+                    if (removeAction.action == removeAction.ACTION_CLEAR_MAP)
+                    {
+                        retMap.clear();
+                    }
+                    else if (removeAction.action == removeAction.ACTION_REMOVE_ALL_KEY)
+                    {
+                        retMap.erase(removeAction.entryKey);
+                    }
+                    else if (removeAction.action == removeAction.ACTION_REMOVE_ALL_KEYVALUE || removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
+                    {
+                        // all other actions require referencing specific keyed elements
+                        auto removeItemRange = retMap.equal_range(removeAction.entryKey);
+                        std::vector<std::multimap<uint160,
+                                        std::tuple<std::vector<unsigned char>, uint256, uint32_t, CUTXORef, CPartialTransactionProof>>::iterator>
+                            itemsToRemove;
+                        for (auto removeItemCursor = removeItemRange.first; removeItemCursor != removeItemRange.second; removeItemCursor++)
                         {
-                            hw.write((char *)&(std::get<0>(removeItemCursor->second)[0]), std::get<0>(removeItemCursor->second).size());
-
-                            uint256 hashVal = hw.GetHash();
-                            if (hashVal == removeAction.valueHash)
+                            CNativeHashWriter hw;
+                            if (std::get<0>(removeItemCursor->second).size())
                             {
-                                itemsToRemove.push_back(removeItemCursor);
-                                if (removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
+                                hw.write((char *)&(std::get<0>(removeItemCursor->second)[0]), std::get<0>(removeItemCursor->second).size());
+
+                                uint256 hashVal = hw.GetHash();
+                                if (hashVal == removeAction.valueHash)
                                 {
-                                    break;
+                                    itemsToRemove.push_back(removeItemCursor);
+                                    if (removeAction.action == removeAction.ACTION_REMOVE_ONE_KEYVALUE)
+                                    {
+                                        break;
+                                    }
                                 }
                             }
                         }
+                        for (auto &oneCursor : itemsToRemove)
+                        {
+                            retMap.erase(oneCursor);
+                        }
                     }
-                    for (auto &oneCursor : itemsToRemove)
-                    {
-                        retMap.erase(oneCursor);
-                    }
+                }
+                catch (const std::exception &)
+                {
+                    continue;
                 }
             }
             else
@@ -2964,7 +2971,7 @@ bool ValidateIdentitySpendMutation(Eval* eval, const CTransaction &spendingTx, c
     if ((oldIdentity.HasActiveCurrency() && !newIdentity.HasActiveCurrency()) ||
         (oldIdentity.HasTokenizedControl() && !newIdentity.HasTokenizedControl()) ||
         (!isCurrencyDef &&
-            (oldIdentity.HasActiveCurrency() != oldIdentity.HasActiveCurrency() ||
+            (oldIdentity.HasActiveCurrency() != newIdentity.HasActiveCurrency() ||
             oldIdentity.HasTokenizedControl() != newIdentity.HasTokenizedControl())) ||
         (isCurrencyDef && !matchingCurDef.IsNFTToken() && newIdentity.HasTokenizedControl()))
     {

@@ -744,7 +744,7 @@ public:
             {
                 hashWriter << *pNonce;
                 hashWriter << height;
-                return ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
+                return value == 0 ? ArithToUint256(UintToArith256(hashWriter.GetHash())) : ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
             }
             else
             {
@@ -752,7 +752,7 @@ public:
                 hashWriter << height;
                 hashWriter << txid;
                 hashWriter << voutNum;
-                return ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
+                return value == 0 ? ArithToUint256(UintToArith256(hashWriter.GetHash())) : ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
             }
         }
         else
@@ -767,7 +767,7 @@ public:
             {
                 hashWriter << *pNonce;
                 hashWriter << height;
-                return ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
+                return value == 0 ? ArithToUint256(UintToArith256(hashWriter.GetHash())) : ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
             }
             else
             {
@@ -775,7 +775,7 @@ public:
                 hashWriter << height;
                 hashWriter << txid;
                 hashWriter << voutNum;
-                return ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
+                return value == 0 ? ArithToUint256(UintToArith256(hashWriter.GetHash())) : ArithToUint256(UintToArith256(hashWriter.GetHash()) / value);
             }
         }
     }

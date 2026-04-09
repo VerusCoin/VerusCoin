@@ -53,7 +53,7 @@ std::vector<unsigned char> uint64_to_vec_BE(uint64_t input){
  **/
 int matchingNibbleLength(std::vector<unsigned char> nibble1,std::vector<unsigned char> nibble2){
     int i;
-    for(i = 0; nibble1.size() > i && nibble1[i] == nibble2[i]; i++) {}
+    for(i = 0; nibble1.size() > i && nibble2.size() > i && nibble1[i] == nibble2[i]; i++) {}
     return i;
 }
 
@@ -350,7 +350,10 @@ std::vector<unsigned char> CETHPATRICIABranch::verifyProof(uint256& rootHash,std
                 return embeddedNode.value;
             } else {
                 uint256 tmp_child;
-                memcpy(&tmp_child,&child.at(0),child.size());
+                if (child.size() == (size_t)tmp_child.size())
+                {
+                    memcpy(&tmp_child, &child.at(0), child.size());
+                }
                 wantedHash = tmp_child;
             }
         } else if(node.type == node.EXTENSION || node.type == node.LEAF){
@@ -372,7 +375,10 @@ std::vector<unsigned char> CETHPATRICIABranch::verifyProof(uint256& rootHash,std
                 return child;
             } else {
                 uint256 tmp_child;
-                memcpy(&tmp_child,&child.at(0),child.size());
+                if (child.size() == (size_t)tmp_child.size())
+                {
+                    memcpy(&tmp_child, &child.at(0), child.size());
+                }
                 wantedHash = tmp_child;
             }
 

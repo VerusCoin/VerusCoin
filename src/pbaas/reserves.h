@@ -1274,7 +1274,7 @@ public:
         {
             weights = std::vector<int32_t>(currencies.size());
         }
-        if (reserves.size() != reserves.size())
+        if (reserves.size() != currencies.size())
         {
             reserves = std::vector<int64_t>(currencies.size());
         }
@@ -1775,7 +1775,7 @@ public:
     UniValue ToUniValue() const;
 
     bool IsReject() const { return flags & IS_REJECT; }
-    bool IsValid() const { return flags & IS_VALID && !IsReject(); }
+    bool IsValid() const { return (flags & IS_VALID) && !IsReject(); }
     bool IsReserveOutput() const { return IsValid() && flags & IS_RESERVE_OUTPUT; }
     bool IsReserveTransfer() const { return flags & IS_RESERVETRANSFER; }
     bool IsReserveDeposit() const { return flags & IS_RESERVE_DEPOSIT; }

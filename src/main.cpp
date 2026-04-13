@@ -1163,7 +1163,7 @@ bool ContextualCheckCoinbaseTransaction(const CTransaction &tx, uint32_t nHeight
             }
 
             // all pre-allocations are done with smart transactions
-            for (int i; i < tx.vout.size(); i++)
+            for (int i = 0; i < tx.vout.size(); i++)
             {
                 auto &output = tx.vout[i];
                 COptCCParams p;

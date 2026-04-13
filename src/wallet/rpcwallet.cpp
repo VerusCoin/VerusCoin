@@ -6926,8 +6926,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
 
         UniValue av = find_value(o, "amount");
         CAmount nAmount = AmountFromValue( av );
-        if (nAmount < 0)
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
+        if (nAmount < 0 || (!isZaddr && nAmount <= 0))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must not be negative and > 0 if not to z-address");
 
         if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(address, nAmount, memo, CScript()) );

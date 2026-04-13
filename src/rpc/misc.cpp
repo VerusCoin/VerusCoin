@@ -685,13 +685,9 @@ UniValue createmultisig(const UniValue& params, bool fHelp)
     return result;
 }
 
-uint256 HashFile(const std::string &filepath, CNativeHashWriter &ss)
+// no security check for file access
+uint256 _HashFile(const std::string &filepath, CNativeHashWriter &ss)
 {
-    if (!boost::filesystem::exists(filepath))
-    {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot read file: " + filepath);
-    }
-
     std::ifstream ifs(filepath, std::ios::binary | std::ios::in);
     if (!ifs)
     {
@@ -715,6 +711,15 @@ uint256 HashFile(const std::string &filepath, CNativeHashWriter &ss)
    }
 
     return ss.GetHash();
+}
+
+uint256 HashFile(const std::string &filepath, CNativeHashWriter &ss)
+{
+    if (!GetBoolArg("-enablefileencryption", true))
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot read file: " + filepath + " for data output");
+    }
+    return _HashFile(filepath, ss);
 }
 
 uint256 HashFile(const std::string &filepath)
@@ -2073,7 +2078,7 @@ UniValue getaddressutxos(const UniValue& params, bool fHelp)
             txnouttype outType;
             std::vector<CTxDestination> addresses;
             int required;
-            if (ExtractDestinations(it->second.script, outType, addresses, required))
+            if (ExtractDestinations(it->second.script, outType, addresses, required, nullptr, nullptr, nullptr, it->second.blockHeight))
             {
                 UniValue addressesUni(UniValue::VARR);
                 for (auto addr : addresses)

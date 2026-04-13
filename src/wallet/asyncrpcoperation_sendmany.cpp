@@ -1144,6 +1144,8 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptProtectedCoinbase)
         pwalletMain->AvailableCoins(vecOutputs, false, NULL, false, true, fAcceptProtectedCoinbase, false, false, true);
     }
 
+    uint32_t nHeight = chainActive.Height();
+
     for (COutput& out : vecOutputs)
     {
         CTxDestination dest;
@@ -1156,12 +1158,16 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptProtectedCoinbase)
             continue;
         }
 
+        if (out.nDepth > nHeight) {
+            continue;
+        }
+
         std::vector<CTxDestination> addresses;
         int nRequired;
         bool canSign, canSpend;
         CTxDestination address;
         txnouttype txType;
-        if (!ExtractDestinations(out.tx->vout[out.i].scriptPubKey, txType, addresses, nRequired, pwalletMain, &canSign, &canSpend))
+        if (!ExtractDestinations(out.tx->vout[out.i].scriptPubKey, txType, addresses, nRequired, pwalletMain, &canSign, &canSpend, nHeight - out.nDepth))
         {
             continue;
         }

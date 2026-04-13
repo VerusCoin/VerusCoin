@@ -220,14 +220,12 @@ UniValue RPCCall(const string& strMethod, const UniValue& params, const string c
 
 UniValue RPCCallRoot(const string& strMethod, const UniValue& params, int timeout)
 {
-    string host, credentials;
-    int port;
     map<string, string> settings;
     map<string, vector<string>> settingsmulti;
 
     if (PBAAS_HOST != "" && PBAAS_PORT != 0)
     {
-        return RPCCall(strMethod, params, PBAAS_USERPASS, PBAAS_PORT, PBAAS_HOST);
+        return RPCCall(strMethod, params, PBAAS_USERPASS, PBAAS_PORT, PBAAS_HOST, timeout);
     }
     else if ((_IsVerusActive() &&
               ReadConfigFile("veth", settings, settingsmulti)) ||
@@ -250,7 +248,7 @@ UniValue RPCCallRoot(const string& strMethod, const UniValue& params, int timeou
             {
                 PBAAS_HOST = "127.0.0.1";
             }
-            return RPCCall(strMethod, params, credentials, port, host, timeout);
+            return RPCCall(strMethod, params, PBAAS_USERPASS, PBAAS_PORT, PBAAS_HOST, timeout);
         }
     }
     return UniValue(UniValue::VNULL);

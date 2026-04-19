@@ -1255,7 +1255,33 @@ CIdentity::CIdentity(const UniValue &uni) : CPrincipal(uni)
                                 std::string valueString;
                                 if (oneValue.isStr() && IsHex(valueString = uni_get_str(oneValue)))
                                 {
-                                    contentMultiMap.insert(std::make_pair(key, ParseHex(valueString)));
+                                    std::vector<unsigned char> rawBytes = ParseHex(valueString);
+                                    if (key == CVDXF_Data::ContentMultiMapRemoveKey())
+                                    {
+                                        try
+                                        {
+                                            CDataStream ss(rawBytes, PROTOCOL_VERSION, SER_DISK);
+                                            uint160 objTypeKey;
+                                            uint32_t serVersion;
+                                            size_t serSize;
+                                            CContentMultiMapRemove removeAction;
+                                            ss >> objTypeKey;
+                                            ss >> VARINT(serVersion);
+                                            ss >> VARINT(serSize);
+                                            ss >> removeAction;
+                                            if (objTypeKey != CVDXF_Data::ContentMultiMapRemoveKey() || !removeAction.IsValid())
+                                            {
+                                                nVersion = VERSION_INVALID;
+                                                break;
+                                            }
+                                        }
+                                        catch (const std::exception &)
+                                        {
+                                            nVersion = VERSION_INVALID;
+                                            break;
+                                        }
+                                    }
+                                    contentMultiMap.insert(std::make_pair(key, rawBytes));
                                 }
                                 else if (oneValue.isObject())
                                 {
@@ -1274,7 +1300,33 @@ CIdentity::CIdentity(const UniValue &uni) : CPrincipal(uni)
                             std::string valueString;
                             if (IsHex(valueString = uni_get_str(values[i])))
                             {
-                                contentMultiMap.insert(std::make_pair(key, ParseHex(valueString)));
+                                std::vector<unsigned char> rawBytes = ParseHex(valueString);
+                                if (key == CVDXF_Data::ContentMultiMapRemoveKey())
+                                {
+                                    try
+                                    {
+                                        CDataStream ss(rawBytes, PROTOCOL_VERSION, SER_DISK);
+                                        uint160 objTypeKey;
+                                        uint32_t serVersion;
+                                        size_t serSize;
+                                        CContentMultiMapRemove removeAction;
+                                        ss >> objTypeKey;
+                                        ss >> VARINT(serVersion);
+                                        ss >> VARINT(serSize);
+                                        ss >> removeAction;
+                                        if (objTypeKey != CVDXF_Data::ContentMultiMapRemoveKey() || !removeAction.IsValid())
+                                        {
+                                            nVersion = VERSION_INVALID;
+                                            break;
+                                        }
+                                    }
+                                    catch (const std::exception &)
+                                    {
+                                        nVersion = VERSION_INVALID;
+                                        break;
+                                    }
+                                }
+                                contentMultiMap.insert(std::make_pair(key, rawBytes));
                             }
                             else
                             {

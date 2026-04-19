@@ -2703,7 +2703,7 @@ uint160 ValidateCurrencyName(std::string currencyStr, bool ensureCurrencyValid, 
         if (ensureCurrencyValid)
         {
             CCurrencyDefinition currencyDef;
-            if (GetCurrencyDefinition(currencyID, currencyDef) || !currencyDef.IsValid())
+            if (GetCurrencyDefinition(currencyID, currencyDef) && currencyDef.IsValid())
             {
                 retVal = currencyDef.GetID();
                 if (pCurrencyDef)
@@ -6108,12 +6108,8 @@ UniValue submitchallenges(const UniValue& params, bool fHelp)
 
                 LOCK2(smartTransactionCS, mempool.cs);
 
-                bool relayTx;
                 CValidationState state;
-                {
-                    LOCK2(smartTransactionCS, mempool.cs);
-                    relayTx = myAddtomempool(challengeTx, &state);
-                }
+                bool relayTx = myAddtomempool(challengeTx, &state);;
 
                 // add to mem pool and relay
                 if (!relayTx)
@@ -16028,6 +16024,11 @@ UniValue updateidentity(const UniValue& params, bool fHelp)
         {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Can only use ID control token for ID that has tokenized ID control on this chain");
         }
+    }
+
+    if (oldID.IsRevocation(newID) && newID.recoveryAuthority == newID.GetID() && !newID.HasTokenizedControl())
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot revoke an identity with self as the recovery authority, unless the ID has tokenized ID control");
     }
 
     // check fee offer

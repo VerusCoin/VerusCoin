@@ -1158,7 +1158,7 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptProtectedCoinbase)
             continue;
         }
 
-        if (out.nDepth >= nHeight) {
+        if (out.nDepth > nHeight) {
             continue;
         }
 

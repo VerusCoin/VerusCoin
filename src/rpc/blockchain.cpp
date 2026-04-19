@@ -534,7 +534,7 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() > 2)
         throw runtime_error(
-            "getrawmempool ( verbose ) '{\"include\":[],\"exclude\":[]}'\n"
+            "getrawmempool ( verbose ) '{\"include\":[],\"exclude\":[], \"expiresbefore\":height, \"expiresafter\":height, \"fulltxes\":true | false}'\n"
             "\nReturns all transaction ids in memory pool as a json array of string transaction ids.\n"
             "\nArguments:\n"
             "1. verbose           (boolean, optional, default=false) true for a json object, false for array of transaction ids\n"
@@ -572,9 +572,9 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
     std::set<std::string> validKeySet = {"include","exclude","expiresbefore","expiresafter", "fulltxes"};
     std::string validKeys = "include, exclude, expiresbefore, expiresafter, fulltxes";
 
-    std::string validIncludes = "evalnone, currencydef, evidence, storage"
-                                "notarization, reservetransfer, reserveoutput, identitydefinition"
-                                "reservedeposit, export, import, identity"
+    std::string validIncludes = "evalnone, currencydef, evidence, storage, "
+                                "notarization, reservetransfer, reserveoutput, identitydefinition, "
+                                "reservedeposit, export, import, identity, "
                                 "commitment, identitycommitment, nonsmart";
 
     // those postfixed with invalid should never be found
@@ -639,6 +639,14 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
             displayFullTx = uni_get_bool(find_value(param1, "fulltxes"));
             if (includeUni.isArray() && includeUni.size() <= keyWords.size())
             {
+                if (includeUni.size() == 0)
+                {
+                    includeUni = UniValue(UniValue::VARR);
+                    for (auto it = keyWords.begin(); it != keyWords.end(); it++)
+                    {
+                        includeUni.push_back(it->first);
+                    }
+                }
                 for (int i = 0; i < includeUni.size(); i++)
                 {
                     if (!includeUni[i].isStr() || !keyWords.count(uni_get_str(includeUni[i])))

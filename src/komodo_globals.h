@@ -44,6 +44,14 @@ bool PBAAS_TESTMODE;
 std::string PBAAS_HOST;
 int32_t PBAAS_PORT;
 std::string PBAAS_USERPASS;
+// Solana keeper RPC endpoint, parallel to PBAAS_* (Ethereum bridge).
+// Populated by `CConnectedChains::ConfigureSolBridge()` when a "sol"
+// gateway identity is registered on this chain. `RPCCallRoot()` picks
+// these over PBAAS_* when the active bridge has
+// proofProtocol == PROOF_SOLANANOTARIZATION.
+std::string SOLANA_HOST;
+int32_t SOLANA_PORT;
+std::string SOLANA_USERPASS;
 std::string ASSETCHAINS_RPCHOST, ASSETCHAINS_RPCCREDENTIALS;
 
 uint160 ASSETCHAINS_CHAINID;

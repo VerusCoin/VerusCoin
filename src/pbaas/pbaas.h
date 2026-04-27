@@ -934,6 +934,11 @@ public:
         TYPE_PBAAS = 1,
         TYPE_ETH = 2,
         TYPE_KOMODO = 3,
+        // Solana keeper-served notary system. Behaves like TYPE_ETH for
+        // dispatch purposes (RPCCallRoot, witness logic) but the
+        // proof-root format is the Solana on-chain `ProofRoot` PDA, not
+        // an Ethereum patricia tree. See `CProofRoot::TYPE_SOLANA`.
+        TYPE_SOL = 4,
     };
 
     uint32_t notarySystemVersion;
@@ -1226,6 +1231,12 @@ public:
     bool IsVerusPBaaSAvailable();
     bool IsNotaryAvailable(bool callToCheck=false);
     bool ConfigureEthBridge(bool callToCheck=false);
+    // Mirrors ConfigureEthBridge for the Solana keeper. Looks up a
+    // "sol" gateway identity on this chain and reads <datadir>/sol/sol.conf
+    // for keeper RPC creds. Should be invoked AFTER ConfigureEthBridge
+    // — the daemon supports one bridge gateway at a time, so we only
+    // attempt Solana when ETH didn't establish one.
+    bool ConfigureSolBridge(bool callToCheck=false);
     void CheckOracleUpgrades();
     bool IsUpgradeActive(const uint160 &upgradeID, uint32_t blockHeight=UINT32_MAX, uint32_t blockTime=UINT32_MAX) const;
     uint32_t GetZeroViaHeight(bool getVerusHeight) const;

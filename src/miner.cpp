@@ -964,7 +964,7 @@ bool AddOneCurrencyImport(const CCurrencyDefinition &newCurrency,
             CTransaction firstExportTx;
             if (!pFirstExport || !(pFirstExport->second.IsValid() && !pFirstExport->second.GetPartialTransaction(firstExportTx).IsNull()))
             {
-                LogPrintf("%s: invalid first export for PBaaS or converter launch\n");
+                LogPrintf("%s: invalid first export for PBaaS or converter launch\n", __func__);
                 return false;
             }
 
@@ -972,7 +972,7 @@ bool AddOneCurrencyImport(const CCurrencyDefinition &newCurrency,
             CCrossChainExport ccx(firstExportTx.vout[pFirstExport->first.n].scriptPubKey);
             if (!ccx.IsValid())
             {
-                LogPrintf("%s: invalid export output for PBaaS or converter launch\n");
+                LogPrintf("%s: invalid export output for PBaaS or converter launch\n", __func__);
                 return false;
             }
 
@@ -2413,6 +2413,11 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const std::vecto
             else
             {
                 notaryConnected = ConnectedChains.ConfigureEthBridge(true);
+                if (!notaryConnected)
+                {
+                    // Try the Solana keeper if no veth gateway exists.
+                    notaryConnected = ConnectedChains.ConfigureSolBridge(true);
+                }
             }
         }
 

@@ -6163,6 +6163,9 @@ uint32_t CConnectedChains::GetVerusVersion() const
 
 extern string PBAAS_HOST, PBAAS_USERPASS;
 extern int32_t PBAAS_PORT;
+// Solana keeper endpoint, populated by `ConfigureSolBridge()` below.
+extern string SOLANA_HOST, SOLANA_USERPASS;
+extern int32_t SOLANA_PORT;
 bool CConnectedChains::CheckVerusPBaaSAvailable(UniValue &chainInfoUni, UniValue &chainDefUni)
 {
     if (chainInfoUni.isObject() && chainDefUni.isObject())
@@ -6867,6 +6870,81 @@ bool CConnectedChains::ShouldForceRefundDeFi(uint32_t height, const uint160 &cur
     bool inRange = (height >= (PBAAS_REFUND_KAIJU_HEIGHT1 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT1 + 1))) ||
                    (height >= (PBAAS_REFUND_KAIJU_HEIGHT2 - 1) && (height <= (PBAAS_REFUND_KAIJU_HEIGHT2 + 1)));
     return (_IsVerusActive() && !PBAAS_TESTMODE && inRange && currencyID == KaijuCurrencyID()) ? true : false;
+}
+
+bool CConnectedChains::ConfigureSolBridge(bool callToCheck)
+{
+    // Solana bridge analogue of ConfigureEthBridge — wires up a "sol"
+    // gateway identity to the keeper's RPC endpoint by reading
+    // <datadir>/sol/sol.conf. Mirrors the ETH path so the rest of the
+    // daemon (RPCCallRoot, FirstNotaryChain, IsNotaryAvailable) handles
+    // the resulting NotarySystem entry uniformly.
+    if (!_IsVerusActive())
+    {
+        return false;
+    }
+    if (IsNotaryAvailable())
+    {
+        return true;
+    }
+    LOCK(cs_main);
+    if (FirstNotaryChain().IsValid())
+    {
+        return IsNotaryAvailable(callToCheck);
+    }
+
+    CRPCChainData solNotaryChain;
+    uint160 gatewayParent = ASSETCHAINS_CHAINID;
+    static uint160 gatewayID;
+    if (gatewayID.IsNull())
+    {
+        gatewayID = CIdentity::GetID("sol", gatewayParent);
+    }
+    solNotaryChain.chainDefinition = ConnectedChains.GetCachedCurrency(gatewayID);
+    if (solNotaryChain.chainDefinition.IsValid())
+    {
+        map<string, string> settings;
+        map<string, vector<string>> settingsmulti;
+
+        try
+        {
+            if (ReadConfigFile("sol", settings, settingsmulti) &&
+                settingsmulti.count("-rpchost") &&
+                settingsmulti.count("-rpcuser") &&
+                settingsmulti.count("-rpcport") &&
+                settingsmulti.count("-rpcpassword"))
+            {
+                solNotaryChain.rpcUserPass = SOLANA_USERPASS = settingsmulti.find("-rpcuser")->second[0] + ":" + settingsmulti.find("-rpcpassword")->second[0];
+                solNotaryChain.rpcPort = SOLANA_PORT = atoi(settingsmulti.find("-rpcport")->second[0]);
+                SOLANA_HOST = settingsmulti.find("-rpchost")->second[0];
+            }
+        }
+        catch(const std::exception& e)
+        {
+            LogPrintf("%s: Error reading sol config file - may be invalid or misconfigured\n", __func__);
+        }
+
+        if (!SOLANA_HOST.size())
+        {
+            SOLANA_HOST = "127.0.0.1";
+        }
+        solNotaryChain.rpcHost = SOLANA_HOST;
+        CChainNotarizationData cnd;
+        if (!GetNotarizationData(gatewayID, cnd))
+        {
+            LogPrintf("%s: Failed to get notarization data for solana notary chain %s\n", __func__, solNotaryChain.chainDefinition.name.c_str());
+            return false;
+        }
+
+        notarySystems.insert(std::make_pair(gatewayID,
+                                            CNotarySystemInfo(cnd.IsConfirmed() ? cnd.vtx[cnd.lastConfirmed].second.notarizationHeight : 0,
+                                            solNotaryChain,
+                                            cnd.vtx.size() ? cnd.vtx[cnd.forks[cnd.bestChain].back()].second : CPBaaSNotarization(),
+                                            CNotarySystemInfo::TYPE_SOL,
+                                            CNotarySystemInfo::VERSION_CURRENT)));
+        return IsNotaryAvailable(callToCheck);
+    }
+    return false;
 }
 
 bool CConnectedChains::ConfigureEthBridge(bool callToCheck)

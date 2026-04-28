@@ -1359,10 +1359,9 @@ std::pair<std::vector<CReserveTransfer>, std::vector<std::vector<int>>> GetReser
 }
 
 UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveTransfer &rt, int32_t rtIndexNum, uint32_t blockTime, uint32_t nHeight, CCostBasisTracker *pCurrenciesCostBases,
-                                                                                                                                                       std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pIncomingCostBases,
-                                                                                                                                                       std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pOutgoingCostBases,
                                                                                                                                                        CEarningsTracker *pAggregateEarnings,
-                                                                                                                                                       std::map<std::string, int64_t> *pNativePriceMap)
+                                                                                                                                                       std::map<std::string, int64_t> *pNativePriceMap,
+                                                                                                                                                       bool recordEarningsAndCostBasis)
 {
     CCrossChainImport cci;
     CCrossChainImport sysCCI;
@@ -1389,29 +1388,114 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
 
         if (pAggregateEarnings)
         {
+            std::map<std::string, int64_t> nativePriceMap;
+            int64_t nativeFromCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FirstCurrency(), nHeight);
+            int64_t fiatFromCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeFromCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
+
+            importOutputs.pushKV("currentcostbasisnative", ValueFromAmount(nativeFromCostBasis));
+            importOutputs.pushKV("currentcostbasisfiat", ValueFromAmount(fiatFromCostBasis));
+
             int64_t nativeCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, convertToCurrency, nHeight);
             importOutputs.pushKV("newcostbasisnative", ValueFromAmount(nativeCostBasis));
 
-            std::map<std::string, int64_t> nativePriceMap;
             int64_t fiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
             importOutputs.pushKV("newcostbasisfiat", ValueFromAmount(fiatCostBasis));
 
             if (pCurrenciesCostBases)
             {
                 int64_t amountLeft = 0;
-                std::vector<std::tuple<uint32_t, int64_t, int64_t>, std::allocator<std::tuple<uint32_t, int64_t, int64_t>>> fromCostBasis = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft);
-                int64_t newAmount = convertToCurrency == ASSETCHAINS_CHAINID ? importTx.vout[rtImportMapping.second[rtIndexNum][0]].nValue : importTx.vout[rtImportMapping.second[rtIndexNum][0]].ReserveOutValue().valueMap[convertToCurrency];
-                pCurrenciesCostBases->PutCurrency(convertToCurrency, blockTime, fiatCostBasis, newAmount);
 
-                // get a weighted average of the cost basis, consider unaccounted for currency to have an unchanged cost-basis, but flag it
+                // time, cost basis, amount
+                std::vector<std::tuple<uint32_t, int64_t, int64_t>, std::allocator<std::tuple<uint32_t, int64_t, int64_t>>> fromCostBasis = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft, blockTime, false);
+
+                int64_t newAmount = convertToCurrency == ASSETCHAINS_CHAINID ? importTx.vout[rtImportMapping.second[rtIndexNum][0]].nValue : importTx.vout[rtImportMapping.second[rtIndexNum][0]].ReserveOutValue().valueMap[convertToCurrency];
+
+                if (recordEarningsAndCostBasis && pCurrenciesCostBases)
+                {
+                    if (LogAcceptCategory("earnings"))
+                    {
+                        CAmount AmountWithCostBasis = 0;
+                        CAmount LowCostBasis = 0;
+                        CAmount HiCostBasis = 0;
+                        bool hasZeroCostBasis = false;
+                        UniValue costBasisArrUni(UniValue::VARR);
+                        for (auto const &oneCostBasis : fromCostBasis)
+                        {
+                            costBasisArrUni.push_back(
+                                DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", std::get<0>(oneCostBasis)) +
+                                                  " costbasis: " + ValueFromAmount(std::get<1>(oneCostBasis)).write() +
+                                                  ", amount: " + ValueFromAmount(std::get<2>(oneCostBasis)).write());
+                            if (!std::get<1>(oneCostBasis))
+                            {
+                                hasZeroCostBasis = true;
+                            }
+                            AmountWithCostBasis += std::get<2>(oneCostBasis);
+                            LowCostBasis = !hasZeroCostBasis && LowCostBasis == 0 ? std::get<1>(oneCostBasis) : std::min(LowCostBasis, std::get<1>(oneCostBasis));
+                            HiCostBasis = std::max(HiCostBasis, std::get<1>(oneCostBasis));
+                        }
+                        importOutputs.pushKV("originalcostbases", costBasisArrUni);
+                        LogPrintf("Retrieved %ld costbasis entries, for %s (%s), covering a total of %s coins, price range from %s to %s\n", fromCostBasis.size(),
+                                                                                            ConnectedChains.GetFriendlyCurrencyName(rt.FirstCurrency()).c_str(),
+                                                                                            EncodeDestination(CIdentityID(rt.FirstCurrency())).c_str(),
+                                                                                            ValueFromAmount(AmountWithCostBasis).write().c_str(),
+                                                                                            ValueFromAmount(LowCostBasis).write().c_str(),
+                                                                                            ValueFromAmount(HiCostBasis).write().c_str());
+                    }
+                    importOutputs.pushKV("addingcostbasiscurrency", ConnectedChains.GetFriendlyCurrencyName(convertToCurrency));
+                    importOutputs.pushKV("addingcostbasisquantity", ValueFromAmount(newAmount));
+                    importOutputs.pushKV("addingcostbasisfiat", ValueFromAmount(fiatCostBasis));
+                    importOutputs.pushKV("addingcostbasisdatetime", DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", blockTime));
+                    pCurrenciesCostBases->PutCurrency(convertToCurrency, blockTime, fiatCostBasis, newAmount);
+                    if (LogAcceptCategory("earnings"))
+                    {
+                        UniValue costBasesFound(UniValue::VARR);
+                        auto startIter = pCurrenciesCostBases->costBasisMap.lower_bound({convertToCurrency, blockTime, 0});
+                        auto endIter = pCurrenciesCostBases->costBasisMap.upper_bound({convertToCurrency, blockTime, INT64_MAX});
+                        for (; startIter != endIter; startIter++)
+                        {
+                            costBasesFound.push_back(DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", std::get<1>(startIter->first)) +
+                                                  " costbasis: " + ValueFromAmount(std::get<2>(startIter->first)).write() +
+                                                  ", amount: " + ValueFromAmount(startIter->second).write());
+                        }
+                        importOutputs.pushKV("costbasesnow", costBasesFound);
+                    }
+                }
+                else if (pCurrenciesCostBases)
+                {
+                    UniValue returnCostBasisArrUni(UniValue::VARR);
+                    // if we're not doing earnings reporting, put cost bases back
+                    for (auto const &oneCostBasis : fromCostBasis)
+                    {
+                        if (std::get<0>(oneCostBasis) != blockTime || std::get<1>(oneCostBasis) != 0)
+                        {
+                            if (LogAcceptCategory("earnings"))
+                            {
+                                returnCostBasisArrUni.push_back(
+                                    DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", std::get<0>(oneCostBasis)) +
+                                                        " costbasis: " + ValueFromAmount(std::get<1>(oneCostBasis)).write() +
+                                                        ", amount: " + ValueFromAmount(std::get<2>(oneCostBasis)).write());
+                            }
+                            pCurrenciesCostBases->PutCurrency(rt.FirstCurrency(), std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis));
+                        }
+                    }
+                    if (returnCostBasisArrUni.size())
+                    {
+                        importOutputs.pushKV("restoringcostbases", returnCostBasisArrUni);
+                    }
+                }
+
+                // get a weighted average of the cost basis, consider unaccounted for currency to have a cost-basis of 0, but flag it
                 if (amountLeft)
                 {
                     UniValue missingCostBasis(UniValue::VOBJ);
                     missingCostBasis.pushKV(EncodeDestination(CIdentityID(rt.FirstCurrency())), ValueFromAmount(amountLeft));
                     importOutputs.pushKV("missinginitialcostbasis", missingCostBasis);
-                    int64_t currentCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FirstCurrency(), nHeight);
-                    int64_t currentFiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(currentCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
-                    fromCostBasis.push_back({blockTime, currentFiatCostBasis, amountLeft});
+                    int64_t currentCostBasis = 0;
+                    int64_t currentFiatCostBasis = 0;
+                    fromCostBasis.push_back({blockTime, 0, amountLeft});
+                    // int64_t currentCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FirstCurrency(), nHeight);
+                    // int64_t currentFiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(currentCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
+                    // fromCostBasis.push_back({blockTime, currentFiatCostBasis, amountLeft});
                 }
 
                 // use "from" cost basis and add fees to make total cost basis + fees
@@ -1430,28 +1514,40 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
                         initialShortTermCostBasis += CCoinbaseCurrencyState::NativeToReserveRaw(std::get<2>(oneCostBasis), std::get<1>(oneCostBasis));
                     }
                 }
+
+                importOutputs.pushKV("initiallongtermcostbasis", ValueFromAmount(initialLongTermCostBasis));
+                importOutputs.pushKV("initialshorttermcostbasis", ValueFromAmount(initialShortTermCostBasis));
+                importOutputs.pushKV("currentcostbasis", ValueFromAmount(
+                                                            CCoinbaseCurrencyState::NativeToReserveRaw(rt.FirstValue(), fiatFromCostBasis)));
+
                 int64_t longTermNewAmount = CCurrencyDefinition::CalculateRatioOfValue(newAmount, CCurrencyDefinition::CalculateRatioOfTwoValues(initialLongTermAmount, rt.FirstValue()));
                 int64_t shortTermNewAmount = newAmount - longTermNewAmount;
 
                 int64_t longTermNewCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(longTermNewAmount, fiatCostBasis);
                 int64_t shortTermNewCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(shortTermNewAmount, fiatCostBasis);
 
-                if (longTermNewAmount)
+                if (recordEarningsAndCostBasis)
                 {
-                    pAggregateEarnings->AddLongTerm(longTermNewCostBasis - initialLongTermCostBasis);
-                }
+                    if (longTermNewAmount)
+                    {
+                        importOutputs.pushKV("gainlosslongterm", ValueFromAmount(longTermNewCostBasis - initialLongTermCostBasis));
+                        pAggregateEarnings->AddLongTerm(longTermNewCostBasis - initialLongTermCostBasis);
+                    }
 
-                if (shortTermNewAmount)
-                {
-                    pAggregateEarnings->AddShortTerm(shortTermNewCostBasis - initialShortTermCostBasis);
-                }
+                    if (shortTermNewAmount)
+                    {
+                        importOutputs.pushKV("gainlossshortterm", ValueFromAmount(shortTermNewCostBasis - initialShortTermCostBasis));
+                        pAggregateEarnings->AddShortTerm(shortTermNewCostBasis - initialShortTermCostBasis);
+                    }
 
-                // add fees
-                if (importNotarization.currencyState.GetReserveMap().count(rt.FeeCurrencyID()))
-                {
-                    int64_t feeCostBasisNative = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FeeCurrencyID(), nHeight);
-                    int64_t feeValueFiat = CCoinbaseCurrencyState::NativeToReserveRaw(rt.nFees, CCoinbaseCurrencyState::NativeToReserveRaw(feeCostBasisNative, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID())));
-                    pAggregateEarnings->AddFees(feeValueFiat);
+                    // add fees
+                    if (importNotarization.currencyState.GetReserveMap().count(rt.FeeCurrencyID()))
+                    {
+                        int64_t feeCostBasisNative = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FeeCurrencyID(), nHeight);
+                        int64_t feeValueFiat = CCoinbaseCurrencyState::NativeToReserveRaw(rt.nFees, CCoinbaseCurrencyState::NativeToReserveRaw(feeCostBasisNative, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID())));
+                        importOutputs.pushKV("gainlossfees", ValueFromAmount(feeValueFiat));
+                        pAggregateEarnings->AddFees(feeValueFiat);
+                    }
                 }
             }
         }
@@ -1479,8 +1575,6 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
 }
 
 UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CReserveTransfer &rt, CCostBasisTracker *pCurrenciesCostBases,
-                                                                                                    std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pIncomingCostBases,
-                                                                                                    std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pOutgoingCostBases,
                                                                                                     CEarningsTracker *pAggregateEarnings,
                                                                                                     std::map<std::string, int64_t> *pNativePriceMap)
 {
@@ -1543,7 +1637,7 @@ UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CR
                             }
                             else
                             {
-                                ret.pushKV("processedoutputs", GetTransferImportProgress(spendingTx, rt, rtIndexNum, blockIter->second->nTime, blockIter->second->GetHeight(), pCurrenciesCostBases, pIncomingCostBases, pOutgoingCostBases, pAggregateEarnings, pNativePriceMap));
+                                ret.pushKV("processedoutputs", GetTransferImportProgress(spendingTx, rt, rtIndexNum, blockIter->second->nTime, blockIter->second->GetHeight(), pCurrenciesCostBases, pAggregateEarnings, pNativePriceMap, false));
                             }
                         }
                         else
@@ -1597,7 +1691,8 @@ UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CR
                                 // either the import or a way to reference the destination, so it can be related
                                 if (progressExport.destSystemID == ASSETCHAINS_CHAINID)
                                 {
-                                    if (rt.IsConversion())
+                                    // if converting or sending off-chain, it will have earnings impact
+                                    if (rt.IsConversion() || (rt.HasNextLeg() && rt.destination.HasGatewayLeg()))
                                     {
                                         // this will be a conversion, optionally followed by a cross-chain transfer, output the conversion reserve transfer from the import
                                         // look for the export finalization on the export transaction, and get the import that spends it
@@ -1624,7 +1719,107 @@ UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CR
                                                 (bIT = mapBlockIndex.find(importBlockHash)) != mapBlockIndex.end() &&
                                                 chainActive.Contains(bIT->second))
                                             {
-                                                ret.pushKV("processedoutputs", GetTransferImportProgress(importTx, rt, rtIndexNum, bIT->second->nTime, bIT->second->GetHeight(), pCurrenciesCostBases, pIncomingCostBases, pOutgoingCostBases, pAggregateEarnings, pNativePriceMap));
+                                                if (rt.IsConversion())
+                                                {
+                                                    if (rt.HasNextLeg() &&
+                                                        rt.destination.HasGatewayLeg() &&
+                                                        !ConnectedChains.GetCachedCurrency(rt.destination.gatewayID).IsPBaaSChain())
+                                                    {
+                                                        // if this is being converted, then sent to a non-PBaaS capable chain, account for earnings,
+                                                        ret.pushKV("processedoutputs",
+                                                            GetTransferImportProgress(importTx,
+                                                                                    rt,
+                                                                                    rtIndexNum,
+                                                                                    bIT->second->nTime,
+                                                                                    bIT->second->GetHeight(),
+                                                                                    pCurrenciesCostBases,
+                                                                                    pAggregateEarnings,
+                                                                                    pNativePriceMap,
+                                                                                    true));
+                                                    }
+                                                    else
+                                                    {
+                                                        ret.pushKV("processedoutputs",
+                                                            GetTransferImportProgress(importTx,
+                                                                                    rt,
+                                                                                    rtIndexNum,
+                                                                                    bIT->second->nTime,
+                                                                                    bIT->second->GetHeight(),
+                                                                                    pCurrenciesCostBases,
+                                                                                    pAggregateEarnings,
+                                                                                    pNativePriceMap,
+                                                                                    false));
+                                                    }
+                                                }
+
+                                                if (rt.HasNextLeg() && rt.destination.HasGatewayLeg())
+                                                {
+                                                    ret.pushKV("destinationsystem", ConnectedChains.GetFriendlyCurrencyName(rt.destination.gatewayID));
+                                                    ret.pushKV("exporttxid", spendingTx.GetHash().GetHex());
+                                                    ret.pushKV("reservetransferexportindex", rtIndexNum);
+                                                    // take needed currency for off-chain send from any available currency and cost basis, and add to the off-chain export
+                                                    // even if not requested. we will not see this on the other side import
+                                                    if (pCurrenciesCostBases &&
+                                                        (pCurrenciesCostBases->systemCBOnExport.size() == 0 || pCurrenciesCostBases->systemCBOnExport.count(progressExport.destSystemID)))
+                                                    {
+                                                        CAmount amountLeft = 0;
+                                                        std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft, blockIter->second->nTime, true);
+                                                        std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>> cbEntries;
+                                                        for (auto &oneCostBasis : outGoingCostBases)
+                                                        {
+                                                            cbEntries.push_back({rt.FirstCurrency(), std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)});
+                                                        }
+
+                                                        pCurrenciesCostBases->AddOutgoingEvent(rt.destination.gatewayID,
+                                                                                               rt.destination.TypeNoFlags() ==
+                                                                                                    rt.destination.DEST_ETH ?
+                                                                                                        CTxDestination(CIndexID(uint160(rt.destination.destination))) :
+                                                                                                        TransferDestinationToDestination(rt.destination),
+                                                                                               blockIter->second->nTime,
+                                                                                               tx.GetHash(),
+                                                                                               rtIndexNum,
+                                                                                               cbEntries);
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    CTxDestination sendingTo = TransferDestinationToDestination(rt.destination);
+                                                    if (sendingTo.which() != COptCCParams::ADDRTYPE_INVALID &&
+                                                        sendingTo.which() != COptCCParams::ADDRTYPE_INDEX &&
+                                                        !GetDestinationID(sendingTo).IsNull())
+                                                    {
+                                                        if (pCurrenciesCostBases->trackCBSendReceive.count(sendingTo))
+                                                        {
+                                                            ret.pushKV("transferto", EncodeDestination(sendingTo));
+                                                            ret.pushKV("destinationsystem", ConnectedChains.GetFriendlyCurrencyName(progressExport.destSystemID));
+                                                            ret.pushKV("exporttxid", spendingTx.GetHash().GetHex());
+                                                            ret.pushKV("reservetransferexportindex", rtIndexNum);
+                                                            // take needed currency for off-chain send from any available currency and cost basis, and add to the off-chain export
+                                                            // even if not requested. we will not see this on the other side import
+                                                            if (pCurrenciesCostBases &&
+                                                                (pCurrenciesCostBases->systemCBOnExport.size() == 0 || pCurrenciesCostBases->systemCBOnExport.count(progressExport.destSystemID)))
+                                                            {
+                                                                CAmount amountLeft = 0;
+                                                                std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft, blockIter->second->nTime, true);
+                                                                std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>> cbEntries;
+                                                                for (auto &oneCostBasis : outGoingCostBases)
+                                                                {
+                                                                    cbEntries.push_back({rt.FirstCurrency(), std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)});
+                                                                }
+
+                                                                pCurrenciesCostBases->AddOutgoingEvent(progressExport.destSystemID,
+                                                                                                    rt.destination.TypeNoFlags() ==
+                                                                                                    rt.destination.DEST_ETH ?
+                                                                                                        CTxDestination(CIndexID(uint160(rt.destination.destination))) :
+                                                                                                        TransferDestinationToDestination(rt.destination),
+                                                                                                    blockIter->second->nTime,
+                                                                                                    tx.GetHash(),
+                                                                                                    rtIndexNum,
+                                                                                                    cbEntries);
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1636,18 +1831,25 @@ UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CR
                                     ret.pushKV("reservetransferexportindex", rtIndexNum);
 
                                     // take needed currency for off-chain send from any available currency and cost basis, and add to the off-chain export
-                                    if (pOutgoingCostBases && pCurrenciesCostBases)
+                                    if (pCurrenciesCostBases &&
+                                        (pCurrenciesCostBases->systemCBOnExport.size() == 0 || pCurrenciesCostBases->systemCBOnExport.count(progressExport.destSystemID)))
                                     {
-                                        int64_t amountLeft = 0;
-                                        std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft);
+                                        CAmount amountLeft = 0;
+                                        std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft, blockIter->second->nTime, true);
+                                        std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>> cbEntries;
                                         for (auto &oneCostBasis : outGoingCostBases)
                                         {
-                                            (*pOutgoingCostBases)[{spendingTx.GetHash(), rtIndexNum}].insert({{rt.FirstCurrency(), std::get<0>(oneCostBasis)},{std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)}});
+                                            cbEntries.push_back({rt.FirstCurrency(), std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)});
                                         }
-                                        if (amountLeft)
-                                        {
-                                            (*pOutgoingCostBases)[{spendingTx.GetHash(), rtIndexNum}].insert({{rt.FirstCurrency(), blockIter->second->nTime}, {0, amountLeft}});
-                                        }
+
+                                        pCurrenciesCostBases->AddOutgoingEvent(progressExport.destSystemID,
+                                                                               rt.destination.TypeNoFlags() == rt.destination.DEST_ETH ?
+                                                                                    CTxDestination(CIndexID(uint160(rt.destination.destination))) :
+                                                                                    TransferDestinationToDestination(rt.destination),
+                                                                               blockIter->second->nTime,
+                                                                               tx.GetHash(),
+                                                                               rtIndexNum,
+                                                                               cbEntries);
                                     }
                                 }
                             }

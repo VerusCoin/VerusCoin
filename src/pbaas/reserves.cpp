@@ -7279,7 +7279,8 @@ CFeePool::CFeePool(const CTransaction &coinbaseTx)
 CCostBasisTracker::CCostBasisTracker(const UniValue &uni)
 {
     // the univalue object is indexed by currency name with an array of objects, each including "timestamp", "costbasis", and "amount"
-    auto allEntries = find_value(uni, "entries");
+    UniValue allEntries = find_value(uni, "entries");
+
     if (allEntries.isObject())
     {
         std::vector<std::string> currencyNames = allEntries.getKeys();
@@ -7296,12 +7297,35 @@ CCostBasisTracker::CCostBasisTracker(const UniValue &uni)
                         uint32_t blockTime = uni_get_int64(find_value(currencyEntries[i],"timestamp"));
                         int64_t costBasis = AmountFromValueNoErr(find_value(currencyEntries[i],"costbasis"));
                         int64_t amount = AmountFromValueNoErr(find_value(currencyEntries[i],"amount"));
-                        if (amount && costBasis)
-                        {
-                            costBasisMap.insert({{curID, blockTime}, {costBasis, amount}});
-                        }
+                        PutCurrency(curID, blockTime, costBasis, amount);
                     }
                 }
+            }
+        }
+    }
+
+    UniValue onlyExportSystems = find_value(uni, "onlyshowexportsto");
+    if (onlyExportSystems.isArray())
+    {
+        for (int i = 0; i < onlyExportSystems.size(); i++)
+        {
+            uint160 oneSysID =  DecodeCurrencyName(uni_get_str(onlyExportSystems[i]));
+            if (!oneSysID.IsNull())
+            {
+                systemCBOnExport.insert(oneSysID);
+            }
+        }
+    }
+
+    UniValue trackCostBasisAddresses = find_value(uni, "trackcostbasisaddresses");
+    if (trackCostBasisAddresses.isArray())
+    {
+        for (int i = 0; i < trackCostBasisAddresses.size(); i++)
+        {
+            CTxDestination oneDestination = DecodeDestination(uni_get_str(trackCostBasisAddresses[i]));
+            if ((oneDestination.which() == COptCCParams::ADDRTYPE_ID || oneDestination.which() == COptCCParams::ADDRTYPE_PKH) && !GetDestinationID(oneDestination).IsNull())
+            {
+                trackCBSendReceive.insert(oneDestination);
             }
         }
     }
@@ -7309,54 +7333,107 @@ CCostBasisTracker::CCostBasisTracker(const UniValue &uni)
 
 void CCostBasisTracker::PutCurrency(const uint160 &currencyID, uint32_t blockTime, int64_t costBasis, int64_t amount)
 {
-    costBasisMap.insert({{currencyID, blockTime}, {costBasis, amount}});
+    // first, check to see if we should combine with another that has the same currency, time, and costbasis
+    // if so, we need to add our amount to the entry's amount
+    costBasisMap[{currencyID, blockTime, costBasis}] += amount;
 }
 
-std::vector<std::tuple<uint32_t, int64_t, int64_t>> CCostBasisTracker::TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft)
+std::vector<std::tuple<uint32_t, int64_t, int64_t>> CCostBasisTracker::TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft, uint32_t curBlockTime, bool zeroFill)
 {
     std::vector<std::tuple<uint32_t, int64_t, int64_t>> retEntries;
+
     // if we can take currency, it gets the date and price. if not, the rest gets zero date and price
     amountLeft = amount;
     int usedEntries = 0;
-    auto startIter = costBasisMap.lower_bound({currencyID, (uint32_t)0});
+    auto startIter = costBasisMap.lower_bound({currencyID, (uint32_t)0, (int64_t)0});
     auto oneIter = startIter;
-    auto endIter = costBasisMap.upper_bound({currencyID, UINT32_MAX});
+    auto endIter = costBasisMap.upper_bound({currencyID, curBlockTime, INT64_MAX});
+    uint32_t earliestDate = curBlockTime;
     for (; amountLeft && oneIter != endIter; oneIter++)
     {
-        if (oneIter->second.second > amountLeft)
+        if (oneIter->second > amountLeft)
         {
-            oneIter->second.second -= amountLeft;
-            retEntries.push_back({oneIter->first.second, oneIter->second.first, amountLeft});
+            earliestDate = std::min(std::get<1>(oneIter->first), earliestDate);
+            oneIter->second -= amountLeft;
+            retEntries.push_back({std::get<1>(oneIter->first), std::get<2>(oneIter->first), amountLeft});
             amountLeft = 0;
             break;
         }
         else
         {
+            earliestDate = std::min(std::get<1>(oneIter->first), earliestDate);
             usedEntries++;
-            retEntries.push_back({oneIter->first.second, oneIter->second.first, oneIter->second.second});
-            amountLeft -= oneIter->second.second;
+            retEntries.push_back({std::get<1>(oneIter->first), std::get<2>(oneIter->first), oneIter->second});
+            amountLeft -= oneIter->second;
         }
     }
     if (usedEntries)
     {
         costBasisMap.erase(startIter, oneIter);
     }
+    if (zeroFill && amountLeft > 0)
+    {
+        retEntries.push_back({earliestDate, 0, amountLeft});
+        amountLeft = 0;
+    }
     return retEntries;
 }
+
+bool CCostBasisTracker::AddIncomingEvent(const uint160 &fromSystem,
+                                         const uint256 &txid,
+                                         int32_t rtIndex,
+                                         const std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> &costBasisData)
+{
+    incomingExports.insert({{fromSystem, txid, rtIndex}, {costBasisData}});
+    return true;
+}
+
+bool CCostBasisTracker::AddOutgoingEvent(const uint160 &toSystem,
+                                         const CTxDestination &toAddress,
+                                         uint32_t atTime,
+                                         const uint256 &txid,
+                                         int32_t rtIndex,
+                                         const std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> &costBasisData)
+{
+    outgoingEvents.insert({{toSystem, toAddress, atTime, txid, rtIndex}, {costBasisData}});
+    return true;
+}
+
 
 UniValue CCostBasisTracker::ToUniValue() const
 {
     UniValue retVal(UniValue::VOBJ);
+
+    UniValue onlyExportSystems(UniValue::VARR);
+    for (const uint160 &oneSysID : systemCBOnExport)
+    {
+        if (!oneSysID.IsNull())
+        {
+            onlyExportSystems.push_back(ConnectedChains.GetFriendlyCurrencyName(oneSysID));
+        }
+    }
+    retVal.pushKV("onlyshowexportsto", onlyExportSystems);
+
+    UniValue trackCostBasisAddresses(UniValue::VARR);
+    for (const CTxDestination &oneDest : trackCBSendReceive)
+    {
+        if ((oneDest.which() == COptCCParams::ADDRTYPE_ID || oneDest.which() == COptCCParams::ADDRTYPE_PKH) && !GetDestinationID(oneDest).IsNull())
+        {
+            trackCostBasisAddresses.push_back(EncodeDestination(oneDest));
+        }
+    }
+    retVal.pushKV("trackcostbasisaddresses", trackCostBasisAddresses);
+
     UniValue entries(UniValue::VOBJ);
     uint160 currentCurID;
     UniValue oneCurrencyOut(UniValue::VARR);
     for (auto &oneEntry : costBasisMap)
     {
-        if (oneEntry.first.first.IsNull())
+        if (std::get<0>(oneEntry.first).IsNull())
         {
             continue;
         }
-        if (oneEntry.first.first != currentCurID &&
+        if (std::get<0>(oneEntry.first) != currentCurID &&
             !currentCurID.IsNull() &&
             oneCurrencyOut.size())
         {
@@ -7364,11 +7441,11 @@ UniValue CCostBasisTracker::ToUniValue() const
             oneCurrencyOut = UniValue(UniValue::VARR);
         }
 
-        currentCurID = oneEntry.first.first;
+        currentCurID = std::get<0>(oneEntry.first);
         UniValue oneEntryVal(UniValue::VOBJ);
-        oneEntryVal.pushKV("timestamp", (int64_t)oneEntry.first.second);
-        oneEntryVal.pushKV("costbasis", ValueFromAmount(oneEntry.second.first));
-        oneEntryVal.pushKV("amount", ValueFromAmount(oneEntry.second.second));
+        oneEntryVal.pushKV("timestamp", (int64_t)std::get<1>(oneEntry.first));
+        oneEntryVal.pushKV("costbasis", ValueFromAmount(std::get<2>(oneEntry.first)));
+        oneEntryVal.pushKV("amount", ValueFromAmount(oneEntry.second));
         oneCurrencyOut.push_back(oneEntryVal);
     }
     if (oneCurrencyOut.size())
@@ -7391,7 +7468,7 @@ uint160 CCostBasisTracker::FiatDefault()
 CEarningsTracker::CEarningsTracker(const UniValue &uni)
 {
     fiatCurrencyID = ValidateCurrencyName(uni_get_str(find_value(uni, "fiatcurrency"), ConnectedChains.GetFriendlyCurrencyName(FiatCurrencyID())));
-    shortLongTermThresholdSeconds = uni_get_int64(find_value(uni, "shortlongthresholdseconds"), defaultShortLongTermThresholdSeconds);
+    shortLongTermThresholdSeconds = uni_get_int64(find_value(uni, "longtermthreshold"), defaultShortLongTermThresholdSeconds);
     validationEarnings = CCurrencyValueMap(find_value(uni, "validationearnings"));
     validationEarningsFiat = AmountFromValueNoErr(find_value(uni, "validationearningsfiat"));
     feesInFiat = AmountFromValueNoErr(find_value(uni, "feesinfiat"));
@@ -7408,7 +7485,7 @@ UniValue CEarningsTracker::ToUniValue() const
 {
     UniValue ret(UniValue::VOBJ);
     ret.pushKV("fiatcurrency", ConnectedChains.GetFriendlyCurrencyName(fiatCurrencyID));
-    ret.pushKV("shortlongthresholdseconds", (int64_t)shortLongTermThresholdSeconds);
+    ret.pushKV("longtermthreshold", (int64_t)shortLongTermThresholdSeconds);
     ret.pushKV("validationearnings", validationEarnings.ToUniValue());
     ret.pushKV("validationearningsfiat", ValueFromAmount(validationEarningsFiat));
     ret.pushKV("feesinfiat", ValueFromAmount(feesInFiat));

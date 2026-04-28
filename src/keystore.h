@@ -236,7 +236,7 @@ public:
                                std::vector<std::pair<CIdentityMapKey, CIdentityMapValue>> &mine,
                                std::vector<std::pair<CIdentityMapKey, CIdentityMapValue>> &imsigner,
                                std::vector<std::pair<CIdentityMapKey, CIdentityMapValue>> &notmine) const;
-    virtual std::set<CKeyID> GetIdentityKeyIDs();
+    virtual std::set<CKeyID> GetIdentityKeyIDs() const;
 
     virtual void ClearCurrencyTrust();
     virtual bool RemoveCurrencyTrust(const uint160 &currencyID);

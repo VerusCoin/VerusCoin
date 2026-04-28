@@ -95,7 +95,7 @@ void EnsureWalletIsUnlocked()
 
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
-void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
+void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry, bool showWalletConflicts=true)
 {
     //int32_t i,n,txheight; uint32_t locktime; uint64_t interest = 0;
     int confirms = wtx.GetDepthInMainChain();
@@ -111,10 +111,13 @@ void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
     }
     uint256 hash = wtx.GetHash();
     entry.push_back(Pair("txid", hash.GetHex()));
-    UniValue conflicts(UniValue::VARR);
-    BOOST_FOREACH(const uint256& conflict, wtx.GetConflicts())
-        conflicts.push_back(conflict.GetHex());
-    entry.push_back(Pair("walletconflicts", conflicts));
+    if (showWalletConflicts)
+    {
+        UniValue conflicts(UniValue::VARR);
+        BOOST_FOREACH(const uint256& conflict, wtx.GetConflicts())
+            conflicts.push_back(conflict.GetHex());
+        entry.push_back(Pair("walletconflicts", conflicts));
+    }
     entry.push_back(Pair("time", wtx.GetTxTime()));
     entry.push_back(Pair("timereceived", (int64_t)wtx.nTimeReceived));
     BOOST_FOREACH(const PAIRTYPE(string,string)& item, wtx.mapValue)
@@ -3031,21 +3034,23 @@ bool ValidateStakeTransaction(const CTransaction &stakeTx, CStakeParams &stakePa
 
 std::pair<std::vector<CReserveTransfer>, std::vector<std::vector<int>>> GetReserveTransferImportOutputMapping(const CTransaction &tx, int outNum, CCrossChainImport &cci, CCrossChainImport &sysCCI, CPBaaSNotarization &importNotarization, int32_t &importOutput, uint32_t nHeight);
 UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CReserveTransfer &rt, CCostBasisTracker *pCurrenciesCostBases=nullptr,
-                                                                                                    std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pIncomingCostBases=nullptr,
-                                                                                                    std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pOutgoingCostBases=nullptr,
                                                                                                     CEarningsTracker *pAggregateEarnings=nullptr,
                                                                                                     std::map<std::string, int64_t> *pNativePriceMap=nullptr);
+UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveTransfer &rt, int32_t rtIndexNum, uint32_t blockTime, uint32_t nHeight, CCostBasisTracker *pCurrenciesCostBases,
+                                                                                                                                                       CEarningsTracker *pAggregateEarnings,
+                                                                                                                                                       std::map<std::string, int64_t> *pNativePriceMap,
+                                                                                                                                                       bool recordEarningsAndCostBasis);
 
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter, CCostBasisTracker *pCurrenciesCostBases=nullptr,
-                                                                                                                                            std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pIncomingCostBases=nullptr,
-                                                                                                                                            std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pOutgoingCostBases=nullptr,
                                                                                                                                             CEarningsTracker *pAggregateEarnings=nullptr,
-                                                                                                                                            std::map<std::string, int64_t> *pNativePriceMap=nullptr);
+                                                                                                                                            std::map<std::string, int64_t> *pNativePriceMap=nullptr,
+                                                                                                                                            bool showWalletConflicts=true,
+                                                                                                                                            bool earningTransactionsOnly=false);
 void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter, CCostBasisTracker *pCurrenciesCostBases,
-                                                                                                                                            std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pIncomingCostBases,
-                                                                                                                                            std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160,uint32_t>, std::pair<int64_t, int64_t>>> *pOutgoingCostBases,
                                                                                                                                             CEarningsTracker *pAggregateEarnings,
-                                                                                                                                            std::map<std::string, int64_t> *pNativePriceMap)
+                                                                                                                                            std::map<std::string, int64_t> *pNativePriceMap,
+                                                                                                                                            bool showWalletConflicts,
+                                                                                                                                            bool earningTransactionsOnly)
 {
     CAmount nFee;
     string strSentAccount;
@@ -3060,6 +3065,8 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
     CCoinsViewCache view(pcoinsTip);
     uint32_t nHeight = chainActive.Height();
 
+    bool isEarningTx = false;
+
     CBlockIndex *pIndex = mapBlockIndex.count(wtx.hashBlock) ? mapBlockIndex[wtx.hashBlock] : nullptr;
 
     if (ValidateStakeTransaction(wtx, p, false))
@@ -3072,6 +3079,11 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
         bIsMint = pIndex && pIndex->IsVerusPOSBlock();
     }
 
+    if (bIsCoinbase)
+    {
+        isEarningTx = true;
+    }
+
     CReserveTransactionDescriptor rtxd(wtx, view, nHeight);
 
     if (isPBaaS)
@@ -3079,6 +3091,13 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
         if (rtxd.IsImport())
         {
             ret.push_back(Pair("isimport", true));
+            isEarningTx = true;
+        }
+
+        // earnings relevant costs, earnings, or conversions
+        if (rtxd.IsReserveTransfer() || rtxd.IsIdentity() || rtxd.IsNotaryPrioritized() || rtxd.IsStorage() || rtxd.IsCurrencyDefinition())
+        {
+            isEarningTx = true;
         }
 
         if (rtxd.IsExport())
@@ -3086,9 +3105,10 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
             ret.push_back(Pair("isexport", true));
         }
 
-        if (rtxd.flags & rtxd.IS_IDENTITY) ret.push_back(Pair("isidentity", true));
-        if (rtxd.flags & rtxd.IS_CURRENCY_DEFINITION) ret.push_back(Pair("iscurrencydefinition", true));
-        if (rtxd.flags & rtxd.IS_CHAIN_NOTARIZATION) ret.push_back(Pair("isnotarization", true));
+        if (rtxd.IsIdentity()) ret.push_back(Pair("isidentity", true));
+        if (rtxd.IsCurrencyDefinition()) ret.push_back(Pair("iscurrencydefinition", true));
+        if (rtxd.IsNotaryPrioritized()) ret.push_back(Pair("isnotarization", true));
+        if (rtxd.IsStorage()) ret.push_back(Pair("isnotarization", true));
         ret.push_back(Pair("nativefees", rtxd.NativeFees()));
         ret.push_back(Pair("reservefees", rtxd.ReserveFees().ToUniValue()));
         if (rtxd.nativeConversionFees || (rtxd.ReserveConversionFeesMap() > CCurrencyValueMap()))
@@ -3102,7 +3122,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
 
     bool fAllAccounts = (strAccount == string("*"));
     bool involvesWatchonly = wtx.IsFromMe(ISMINE_WATCH_ONLY);
-    bool extendedInfo = pCurrenciesCostBases || pAggregateEarnings;
+    bool extendedInfo = pCurrenciesCostBases && pAggregateEarnings;
 
     // Sent
     if ((!listSent.empty() || nFee != 0) && (fAllAccounts || strAccount == strSentAccount))
@@ -3128,9 +3148,10 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     (rt = CReserveTransfer(sentP.vData[0])).IsValid())
                 {
                     entry.push_back(Pair("reservetransfer", rt.ToUniValue()));
+                    CTxDestination rtDest = TransferDestinationToDestination(rt.destination);
                     if (extendedInfo)
                     {
-                        UniValue progressUni = GetReserveTransferProgress(wtx, s.vout, rt, pCurrenciesCostBases, pIncomingCostBases, pOutgoingCostBases, pAggregateEarnings, pNativePriceMap);
+                        UniValue progressUni = GetReserveTransferProgress(wtx, s.vout, rt, pCurrenciesCostBases, pAggregateEarnings, pNativePriceMap);
                         if (!progressUni.isNull())
                         {
                             entry.push_back(Pair("progress", progressUni));
@@ -3144,15 +3165,54 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     {
                         entry.push_back(Pair("tokenamounts", tokenAmounts.ToUniValue()));
                     }
+                    if (s.destination.which() != COptCCParams::ADDRTYPE_INVALID && pCurrenciesCostBases && pCurrenciesCostBases->trackCBSendReceive.count(s.destination))
+                    {
+                        isEarningTx = true;
+                        entry.pushKV("costbasistransfer", ConnectedChains.GetFriendlyCurrencyName(ASSETCHAINS_CHAINID));
+                        entry.pushKV("transferto", EncodeDestination(s.destination));
+                        entry.pushKV("txid", wtx.GetHash().GetHex());
+
+                        if (s.amount)
+                        {
+                            tokenAmounts.valueMap[ASSETCHAINS_CHAINID] = s.amount;
+                        }
+
+                        std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>> cbEntries;
+                        uint32_t txTime = wtx.hashBlock.IsNull() ? 0 : mapBlockIndex[wtx.hashBlock]->nTime;
+
+                        for (auto oneCurrency : tokenAmounts.valueMap)
+                        {
+                            if (oneCurrency.second)
+                            {
+                                CAmount amountLeft = 0;
+                                std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases =
+                                    pCurrenciesCostBases->TakeCurrency(oneCurrency.first, oneCurrency.second, amountLeft, txTime, true);
+                                for (auto &oneCostBasis : outGoingCostBases)
+                                {
+                                    cbEntries.push_back({oneCurrency.first, std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)});
+                                }
+                            }
+                        }
+                        pCurrenciesCostBases->AddOutgoingEvent(rt.destination.gatewayID,
+                                                               s.destination,
+                                                               txTime,
+                                                               wtx.GetHash(),
+                                                               s.vout,
+                                                               cbEntries);
+                    }
                 }
             }
 
             entry.push_back(Pair("vout", s.vout));
             entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
             if (fLong)
-                WalletTxToJSON(wtx, entry);
+                WalletTxToJSON(wtx, entry, showWalletConflicts);
             entry.push_back(Pair("size", static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(wtx), SER_NETWORK, PROTOCOL_VERSION))));
-            ret.push_back(entry);
+
+            if (!earningTransactionsOnly || isEarningTx)
+            {
+                ret.push_back(entry);
+            }
         }
     }
 
@@ -3227,6 +3287,14 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             {
                                 pAggregateEarnings->AddValidationEarnings(ASSETCHAINS_CHAINID, wtx.vout[r.vout].nValue, fiatValidationEarnings);
                                 pCurrenciesCostBases->PutCurrency(ASSETCHAINS_CHAINID, txTime, fiatCostBasis, wtx.vout[r.vout].nValue);
+                                if (bIsMint)
+                                {
+                                    entry.pushKV("earningsstaking", ValueFromAmount(fiatValidationEarnings));
+                                }
+                                else
+                                {
+                                    entry.pushKV("earningsmining", ValueFromAmount(fiatValidationEarnings));
+                                }
                                 entry.push_back(Pair("costbasis", ValueFromAmount(fiatCostBasis)));
                                 entry.push_back(Pair("fiatvalue", ValueFromAmount(fiatValidationEarnings)));
                             }
@@ -3267,6 +3335,10 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             // add available cost bases
                         }
 
+                        auto blockMapIter = mapBlockIndex.find(wtx.hashBlock);
+                        uint32_t blockTime = (blockMapIter != mapBlockIndex.end()) ? blockMapIter->second->nTime : 0;
+                        uint32_t blockHeight = (blockMapIter != mapBlockIndex.end()) ? blockMapIter->second->GetHeight() : nHeight;
+
                         if (reserveTransferMap.first.size() < reserveTransferMap.second.size() &&
                             reserveTransferMap.second[reserveTransferMap.first.size()].size() &&
                             r.vout >= reserveTransferMap.second[reserveTransferMap.first.size()][0])
@@ -3274,19 +3346,17 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             // this is put on the entry itself intentionally, at the same level as "mint"
 
                             // add this to earnings
-                            // TODO: ACCOUNTING - add all currencies, not just native to earnings for PBaaS chains
                             if (pAggregateEarnings && pCurrenciesCostBases)
                             {
                                 std::map<std::string, int64_t> nativePriceMap;
-                                auto blockMapIter = mapBlockIndex.find(wtx.hashBlock);
-                                uint32_t blockTime = (blockMapIter != mapBlockIndex.end()) ? blockMapIter->second->nTime : 0;
-                                uint32_t blockHeight = (blockMapIter != mapBlockIndex.end()) ? blockMapIter->second->GetHeight() : nHeight;
+
                                 int64_t fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, blockHeight, pAggregateEarnings->FiatCurrencyID());
                                 int64_t fiatValue = CCoinbaseCurrencyState::NativeToReserveRaw(wtx.vout[r.vout].nValue, fiatCostBasis);
                                 pAggregateEarnings->AddValidationEarnings(ASSETCHAINS_CHAINID, wtx.vout[r.vout].nValue, fiatValue);
                                 pCurrenciesCostBases->PutCurrency(ASSETCHAINS_CHAINID, blockTime, fiatCostBasis, wtx.vout[r.vout].nValue);
+                                entry.pushKV("earningsprocessing", ValueFromAmount(fiatValue));
                                 entry.push_back(Pair("costbasis", ValueFromAmount(fiatCostBasis)));
-                                entry.push_back(Pair("fiatvalue", fiatValue));
+                                entry.push_back(Pair("fiatvalue", ValueFromAmount(fiatValue)));
                             }
 
                             entry.push_back(Pair("earnedfees", true));
@@ -3312,24 +3382,34 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             if (i < reserveTransferMap.first.size())
                             {
                                 // if the source transfer is from off-chain, match it up with an off-chain transfer if it's in our off-chain transfer map
-                                if (pCurrenciesCostBases && pIncomingCostBases && pOutgoingCostBases)
+                                if (pCurrenciesCostBases)
                                 {
-                                    std::map<std::pair<uint256, int32_t>, std::multimap<std::pair<uint160, uint32_t>, std::pair<int64_t, int64_t>>>::iterator knownImportIT = pIncomingCostBases->find({cci.exportTxId, i});
-                                    if (knownImportIT != pIncomingCostBases->end())
+                                    auto knownImportIT = pCurrenciesCostBases->incomingExports.find({cci.sourceSystemID, cci.exportTxId, i});
+
+                                    if (knownImportIT != pCurrenciesCostBases->incomingExports.end())
                                     {
                                         for (auto &oneCostBasis : knownImportIT->second)
                                         {
-                                            pCurrenciesCostBases->PutCurrency(oneCostBasis.first.first, oneCostBasis.first.second, oneCostBasis.second.first, oneCostBasis.second.second);
+                                            pCurrenciesCostBases->PutCurrency(std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis), std::get<3>(oneCostBasis));
                                         }
                                     }
                                     else if (cci.sourceSystemID != ASSETCHAINS_CHAINID)
                                     {
                                         // if from off-chain, flag that it has a missing cost basis by adding an entry of the system with zero cost basis and amount with the export and rt index
-                                        (*pOutgoingCostBases)[{cci.exportTxId, i}].insert({{cci.sourceSystemID, INT32_MAX}, {0, 0}});
+                                        pCurrenciesCostBases->AddIncomingEvent(cci.sourceSystemID, cci.exportTxId, 0,
+                                                                               {{reserveTransferMap.first[i].FirstCurrency(), blockTime, 0, 0}});
                                     }
                                 }
-
                                 fromImport.push_back(Pair("sourcetransfer", reserveTransferMap.first[i].ToUniValue()));
+                                fromImport.pushKV("processedimport", GetTransferImportProgress(wtx,
+                                                                                               reserveTransferMap.first[i],
+                                                                                               i,
+                                                                                               chainActive[chainActive.Height() - wtx.GetDepthInMainChain()]->nTime,
+                                                                                               chainActive.Height() - wtx.GetDepthInMainChain(),
+                                                                                               pCurrenciesCostBases,
+                                                                                               pAggregateEarnings,
+                                                                                               pNativePriceMap,
+                                                                                               true));
                             }
                         }
                         entry.pushKV("fromimport", fromImport);
@@ -3345,9 +3425,12 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                     entry.push_back(Pair("vout", r.vout));
                 }
                 if (fLong)
-                    WalletTxToJSON(wtx, entry);
+                    WalletTxToJSON(wtx, entry, showWalletConflicts);
                 entry.push_back(Pair("size", static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(wtx), SER_NETWORK, PROTOCOL_VERSION))));
-                ret.push_back(entry);
+                if (!earningTransactionsOnly || isEarningTx)
+                {
+                    ret.push_back(entry);
+                }
             }
         }
     }
@@ -3432,9 +3515,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
     std::map<std::string, int64_t> nativePriceMap;
     CCostBasisTracker costBasisTracker;
-    std::map<std::pair<uint256,int32_t>,std::multimap<std::pair<uint160,uint32_t>,std::pair<int64_t,int64_t>>> offChainImportMap;
-    std::map<std::pair<uint256,int32_t>,std::multimap<std::pair<uint160,uint32_t>,std::pair<int64_t,int64_t>>> offChainExportMap;
     CEarningsTracker aggregateEarnings;
+
+    bool showWalletConflicts = true;
+    bool earningTransactionsOnly = false;
 
     UniValue reportQuery;
     uint32_t fromBlock = 0;
@@ -3458,6 +3542,9 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
         if (reportQuery.isObject())
         {
+            showWalletConflicts = uni_get_bool(find_value(reportQuery, "showwalletconflicts"), true);
+            earningTransactionsOnly = uni_get_bool(find_value(reportQuery, "earningtransactionsonly"), false);
+            // printf("showwalletconflicts: %s, earningtransactionsonly: %s\n", showWalletConflicts ? "true" : "false", earningTransactionsOnly ? "true" : "false");
             strAccount = uni_get_str(find_value(reportQuery, "account"), "*");
 
             UniValue nativePricesUni = find_value(reportQuery, "nativeprices");
@@ -3489,9 +3576,16 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
                     {
                         continue;
                     }
+                    uint160 toSystemID = DecodeCurrencyName(uni_get_str(find_value(offChainTransfers[i], "tosystem"), EncodeDestination(CIdentityID(ASSETCHAINS_CHAINID))));
+                    if (toSystemID != ASSETCHAINS_CHAINID)
+                    {
+                        continue;
+                    }
+                    uint160 fromSystemID = DecodeCurrencyName(uni_get_str(find_value(offChainTransfers[i], "fromsystem")));
                     uint256 oneExportID = uint256S(uni_get_str(find_value(offChainTransfers[i], "exportid")));
                     int32_t rtIndex = uni_get_int(find_value(offChainTransfers[i], "rtindex"));
                     UniValue currencyCostBases = find_value(offChainTransfers[i], "currencies");
+                    std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> costBases;
                     if (!oneExportID.IsNull() && currencyCostBases.isArray() && currencyCostBases.size())
                     {
                         for (int j = 0; j < currencyCostBases.size(); j++)
@@ -3504,11 +3598,12 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
                                 int64_t amount = AmountFromValue(find_value(currencyCostBases[j],"amount"));
                                 if (amount)
                                 {
-                                    offChainImportMap[{oneExportID, rtIndex}].insert({{curID, timeStamp}, {costBasis, amount}});
+                                    costBases.push_back({curID, timeStamp,costBasis, amount});
                                 }
                             }
                         }
                     }
+                    costBasisTracker.AddIncomingEvent(fromSystemID, oneExportID, rtIndex, costBases);
                 }
             }
 
@@ -3585,6 +3680,8 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     std::list<CAccountingEntry> acentries;
     CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
 
+    std::vector<std::pair<int64_t, CWallet::TxPair>> reverseTxVec;
+
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
     {
@@ -3604,16 +3701,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
 
         if (!skipThis)
         {
+            reverseTxVec.insert(reverseTxVec.begin(), *it);
             if (pwtx != 0)
             {
-                if (reportQuery.isObject())
-                {
-                    ListTransactions(*pwtx, strAccount, 0, true, ret, filter, &costBasisTracker, &offChainImportMap, &offChainExportMap, &aggregateEarnings, &nativePriceMap);
-                }
-                else
-                {
-                    ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
-                }
+                ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
             }
 
             CAccountingEntry *const pacentry = (*it).second.second;
@@ -3633,21 +3724,39 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     if ((nFrom + nCount) > (int)ret.size())
         nCount = ret.size() - nFrom;
 
-    vector<UniValue> arrTmp = ret.getValues();
+    if (reportQuery.isObject())
+    {
+        // make it again, reversed
+        ret.clear();
+        ret.setArray();
+        for (auto &oneTxval : reverseTxVec)
+        {
+            CWalletTx *const pwtx = oneTxval.second.first;
+            ListTransactions(*pwtx, strAccount, 0, true, ret, filter, &costBasisTracker, &aggregateEarnings, &nativePriceMap, showWalletConflicts, earningTransactionsOnly);
+            CAccountingEntry *const pacentry = oneTxval.second.second;
+            if (pacentry != 0)
+                AcentryToJSON(*pacentry, strAccount, ret);
+        }
+    }
+    else
+    {
+        // reverse what we got
+        vector<UniValue> arrTmp = ret.getValues();
 
-    vector<UniValue>::iterator first = arrTmp.begin();
-    std::advance(first, nFrom);
-    vector<UniValue>::iterator last = arrTmp.begin();
-    std::advance(last, nFrom+nCount);
+        vector<UniValue>::iterator first = arrTmp.begin();
+        std::advance(first, nFrom);
+        vector<UniValue>::iterator last = arrTmp.begin();
+        std::advance(last, nFrom+nCount);
 
-    if (last != arrTmp.end()) arrTmp.erase(last, arrTmp.end());
-    if (first != arrTmp.begin()) arrTmp.erase(arrTmp.begin(), first);
+        if (last != arrTmp.end()) arrTmp.erase(last, arrTmp.end());
+        if (first != arrTmp.begin()) arrTmp.erase(arrTmp.begin(), first);
 
-    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+        std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
 
-    ret.clear();
-    ret.setArray();
-    ret.push_backV(arrTmp);
+        ret.clear();
+        ret.setArray();
+        ret.push_backV(arrTmp);
+    }
 
     if (!summaryOutput)
     {
@@ -3660,23 +3769,46 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     summaryRet.pushKV("costbasisdata", costBasisTracker.ToUniValue());
 
     UniValue offChainTransfers(UniValue::VARR);
-    for (auto &oneOffChainExport : offChainExportMap)
+    for (auto &oneOffChainExport : costBasisTracker.outgoingEvents)
     {
         UniValue oneOffChainTransfer(UniValue::VOBJ);
-        oneOffChainTransfer.pushKV("exportid", oneOffChainExport.first.first.GetHex());
-        oneOffChainTransfer.pushKV("rtindex", oneOffChainExport.first.second);
+        CCurrencyDefinition toSystem = ConnectedChains.GetCachedCurrency(std::get<0>(oneOffChainExport.first));
+        oneOffChainTransfer.pushKV("fromsystem", ConnectedChains.GetFriendlyCurrencyName(ASSETCHAINS_CHAINID));
+        oneOffChainTransfer.pushKV("tosystem", ConnectedChains.GetFriendlyCurrencyName(std::get<0>(oneOffChainExport.first)));
+        oneOffChainTransfer.pushKV("address", std::get<1>(oneOffChainExport.first).which() == COptCCParams::ADDRTYPE_INDEX ?
+                                                CTransferDestination::EncodeEthDestination(GetDestinationID(std::get<1>(oneOffChainExport.first))) :
+                                                EncodeDestination(std::get<1>(oneOffChainExport.first)));
+        oneOffChainTransfer.pushKV("exportid", std::get<3>(oneOffChainExport.first).GetHex());
+        oneOffChainTransfer.pushKV("rtindex", std::get<4>(oneOffChainExport.first));
 
         UniValue currencyCostBases(UniValue::VARR);
+        arith_uint256 totalBigBasis(0);
+        CAmount totalAmount = 0;
         for (auto &oneCostBasis : oneOffChainExport.second)
         {
             UniValue oneCostBasisUni(UniValue::VOBJ);
-            oneCostBasisUni.pushKV("currency", EncodeDestination(CIdentityID(oneCostBasis.first.first)));
-            oneCostBasisUni.pushKV("timestamp", (int64_t)oneCostBasis.first.second);
-            oneCostBasisUni.pushKV("costbasis", ValueFromAmount(oneCostBasis.second.first));
-            oneCostBasisUni.pushKV("amount", ValueFromAmount(oneCostBasis.second.second));
+            oneCostBasisUni.pushKV("currency", EncodeDestination(CIdentityID(std::get<0>(oneCostBasis))));
+            oneCostBasisUni.pushKV("timestamp", (int64_t)std::get<1>(oneCostBasis));
+            oneCostBasisUni.pushKV("datetime", DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", std::get<1>(oneCostBasis)));
+            oneCostBasisUni.pushKV("costbasis", ValueFromAmount(std::get<2>(oneCostBasis)));
+            oneCostBasisUni.pushKV("amount", ValueFromAmount(std::get<3>(oneCostBasis)));
+            oneCostBasisUni.pushKV("lotbasis", ValueFromAmount(CCurrencyState::NativeToReserveRaw(std::get<3>(oneCostBasis), std::get<2>(oneCostBasis))));
             currencyCostBases.push_back(oneCostBasisUni);
+
+            totalAmount += std::get<3>(oneCostBasis);
+            arith_uint256 bigBasis(std::get<2>(oneCostBasis));
+            arith_uint256 bigAmount(std::get<3>(oneCostBasis));
+            totalBigBasis = totalBigBasis + (bigBasis * bigAmount);
         }
         oneOffChainTransfer.pushKV("currencies", currencyCostBases);
+        if (totalAmount)
+        {
+            CAmount averageBasis = (totalBigBasis/totalAmount).GetLow64();
+            oneOffChainTransfer.pushKV("averagecostbasis", ValueFromAmount(averageBasis));
+            oneOffChainTransfer.pushKV("totalamount", ValueFromAmount(totalAmount));
+            oneOffChainTransfer.pushKV("totalfiatcostbasis", ValueFromAmount(CCurrencyState::NativeToReserveRaw(totalAmount, averageBasis)));
+            oneOffChainTransfer.pushKV("txtime", DateTimeStrFormat("%Y-%m-%d, %H:%M:%S", std::get<2>(oneOffChainExport.first)));
+        }
         offChainTransfers.push_back(oneOffChainTransfer);
     }
 

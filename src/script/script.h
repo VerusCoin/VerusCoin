@@ -370,67 +370,6 @@ private:
     int64_t m_value;
 };
 
-typedef prevector<28, unsigned char> CScriptBase;
-
-class CKeyID;
-class CScript;
-class CKeyStore;
-
-class CNoDestination {
-public:
-    friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
-    friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
-};
-
-/** A reference to a CScript: the Hash160 of its serialization (see script.h) */
-class CScriptID : public uint160
-{
-public:
-    CScriptID() : uint160() {}
-    CScriptID(const CScript& in);
-    CScriptID(const uint160& in) : uint160(in) {}
-};
-
-uint160 GetNameID(const std::string &Name, const uint160 &parent);
-
-/** A reference to an identity: the Hash160 of a specific serialization if its name and parent chain (see script.h) */
-class CIdentityID : public uint160
-{
-public:
-    CIdentityID() : uint160() {}
-    CIdentityID(const std::string& in, const uint160 &parent=uint160()) : uint160(GetNameID(in, parent)) {}
-    CIdentityID(const uint160& in) : uint160(in) {}
-};
-
-/** A reference to a quantum public key: the Hash160 of its serialization (see script.h), which it is indexed by in an output */
-class CQuantumID : public uint160
-{
-public:
-    CQuantumID() : uint160() {}
-    CQuantumID(const std::string& in, const uint160 &parent=uint160()) : uint160(GetNameID(in, parent)) {}
-    CQuantumID(const uint160& in) : uint160(in) {}
-};
-
-/** A reference to an index only address type, not used in the API or externally, but
- * reserved as an index for specific types of transaction outputs that can then be queried
- * and assumed to be valid and checked if found.
- * CQuantum public keys are indexed by a CIndexID that represents a hash of the quantum public key. */
-class CIndexID : public uint160
-{
-public:
-    CIndexID() : uint160() {}
-    CIndexID(const uint160& in) : uint160(in) {}
-};
-
-/**
- * A txout script template with a specific destination. It is either:
- *  * CNoDestination: no destination set
- *  * CKeyID: TX_PUBKEYHASH destination
- *  * CScriptID: TX_SCRIPTHASH destination
- *  A CTxDestination is the internal data type encoded in a bitcoin address
- */
-typedef boost::variant<CNoDestination, CPubKey, CKeyID, CScriptID, CIdentityID, CIndexID, CQuantumID> CTxDestination;
-
 CTxDestination TransferDestinationToDestination(const CTransferDestination &transferDest, CCurrencyDefinition::EProofProtocol addressProtocol=CCurrencyDefinition::EProofProtocol::PROOF_INVALID);
 CTxDestination GetCompatibleAuxDestination(const CTransferDestination &transferDest, CCurrencyDefinition::EProofProtocol addressProtocol);
 CTransferDestination DestinationToTransferDestination(const CTxDestination &dest);

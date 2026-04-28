@@ -406,7 +406,7 @@ bool CBasicKeyStore::GetIdentities(std::vector<std::pair<CIdentityMapKey, CIdent
 }
 
 // returns a set of key IDs that have private keys in this wallet and control the identities in this wallet
-std::set<CKeyID> CBasicKeyStore::GetIdentityKeyIDs()
+std::set<CKeyID> CBasicKeyStore::GetIdentityKeyIDs() const
 {
     std::vector<std::pair<CIdentityMapKey, CIdentityMapValue>> mine;
     std::vector<std::pair<CIdentityMapKey, CIdentityMapValue>> imsigner;

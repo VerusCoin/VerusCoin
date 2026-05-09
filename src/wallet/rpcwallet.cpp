@@ -3186,7 +3186,12 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             {
                                 CAmount amountLeft = 0;
                                 std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases =
-                                    pCurrenciesCostBases->TakeCurrency(oneCurrency.first, oneCurrency.second, amountLeft, txTime, true);
+                                    pCurrenciesCostBases->TakeCurrency(oneCurrency.first,
+                                                                       oneCurrency.second,
+                                                                       amountLeft, 
+                                                                       txTime,
+                                                                       true,
+                                                                       pCurrenciesCostBases->type == CCostBasisTracker::HIFO ? CCostBasisTracker::LOWIFO : pCurrenciesCostBases->type);
                                 for (auto &oneCostBasis : outGoingCostBases)
                                 {
                                     cbEntries.push_back({oneCurrency.first, std::get<0>(oneCostBasis), std::get<1>(oneCostBasis), std::get<2>(oneCostBasis)});
@@ -3278,7 +3283,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             txHeight = pIndex ? pIndex->GetHeight() : nHeight;
                             txTime = pIndex ? pIndex->nTime : chainActive[nHeight]->nTime;
 
-                            int64_t fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(CPBaaSNotarization(), pNativePriceMap ? *pNativePriceMap : nativePriceMap, txTime, txHeight, pAggregateEarnings->FiatCurrencyID());
+                            int64_t fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(CPBaaSNotarization(), pNativePriceMap ? *pNativePriceMap : nativePriceMap, txTime, txHeight);
                             int64_t fiatValidationEarnings = CCoinbaseCurrencyState::NativeToReserveRaw(wtx.vout[r.vout].nValue, fiatCostBasis);
 
                             // TODO: ACCOUNTING - add all currencies, not just native to earnings for PBaaS chains
@@ -3350,7 +3355,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                             {
                                 std::map<std::string, int64_t> nativePriceMap;
 
-                                int64_t fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, blockHeight, pAggregateEarnings->FiatCurrencyID());
+                                int64_t fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, blockHeight);
                                 int64_t fiatValue = CCoinbaseCurrencyState::NativeToReserveRaw(wtx.vout[r.vout].nValue, fiatCostBasis);
                                 pAggregateEarnings->AddValidationEarnings(ASSETCHAINS_CHAINID, wtx.vout[r.vout].nValue, fiatValue);
                                 pCurrenciesCostBases->PutCurrency(ASSETCHAINS_CHAINID, blockTime, fiatCostBasis, wtx.vout[r.vout].nValue);
@@ -3396,7 +3401,11 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                                     else if (cci.sourceSystemID != ASSETCHAINS_CHAINID)
                                     {
                                         // if from off-chain, flag that it has a missing cost basis by adding an entry of the system with zero cost basis and amount with the export and rt index
-                                        pCurrenciesCostBases->AddIncomingEvent(cci.sourceSystemID, cci.exportTxId, 0,
+                                        pCurrenciesCostBases->AddOutgoingEvent(cci.sourceSystemID,
+                                                                               TransferDestinationToDestination(reserveTransferMap.first[i].destination),
+                                                                               blockTime,
+                                                                               cci.exportTxId,
+                                                                               i,
                                                                                {{reserveTransferMap.first[i].FirstCurrency(), blockTime, 0, 0}});
                                     }
                                 }
@@ -3423,6 +3432,22 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                 }
                 {
                     entry.push_back(Pair("vout", r.vout));
+                }
+                std::map<std::string, int64_t> nativePriceMap;
+                if (!isEarningTx &&
+                    !bIsStake &&
+                    pCurrenciesCostBases &&
+                    pCurrenciesCostBases->setCurrentCostBasisOnReceipt)
+                {
+                    isEarningTx = true;
+                    uint32_t blockTime = chainActive[chainActive.Height() - wtx.GetDepthInMainChain()]->nTime;
+                    CAmount fiatCostBasis = pCurrenciesCostBases->GetNativeCostBasisFiat(pNativePriceMap ? *pNativePriceMap : nativePriceMap,
+                                                                                         blockTime,
+                                                                                         chainActive.Height() - wtx.GetDepthInMainChain());
+                    int64_t fiatValue = CCoinbaseCurrencyState::NativeToReserveRaw(wtx.vout[r.vout].nValue, fiatCostBasis);
+                    pCurrenciesCostBases->PutCurrency(ASSETCHAINS_CHAINID, blockTime, fiatCostBasis, wtx.vout[r.vout].nValue);
+                    entry.push_back(Pair("receivecostbasis", ValueFromAmount(fiatCostBasis)));
+                    entry.push_back(Pair("receivefiatvalue", ValueFromAmount(fiatValue)));
                 }
                 if (fLong)
                     WalletTxToJSON(wtx, entry, showWalletConflicts);
@@ -3461,9 +3486,71 @@ UniValue listtransactions(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "listtransactions ( (\"account\" | '{queryobject}' count from includeWatchonly)\n"
+            "\nOptional queryobject provides a way to calculate earnings from mining and staking, costbases, and short term capital gains and losses\n"
+            "from transaction activity in a wallet instance. Options include the ability to change the number of days that qualify for short and long\n"
+            "term holding, FIFO, LIFO, HIFO (highest in first out), and weighted average forms of accounting for using cost-bases.\n"
+            "Labeling gift-receiving addresses that result in tracking cost basis transfers, and the ability to receive in the current calculated\n"
+            "cost basis. Output data has cost-basis transfers automatically calculated and generated when currency is transfered cross-chain.\n"
             "\nReturns up to 'count' most recent transactions skipping the first 'from' transactions for account 'account'.\n"
+            "If a query object is used, it is important to set the count to a number of transactions that will be needed to cover \"fromblock\" to\n"
+            "\"toblock\" requested.\n"
             "\nArguments:\n"
             "1. \"account\"    (string, optional) DEPRECATED. The account name. Should be \"*\".\n"
+            "1. \"{queryobject}\" (json string, optional) If a json object is passed in place of the account name, it offers extended processing\n"
+            "                  for conversions or other earnings impacting transactions, and depending on the options, a variety of reporting capabilities."
+            "   {\n"
+            "       \"fromblock\":3369326,\n"
+            "       \"toblock\":3878810,\n"
+            "       \"showwalletconflicts\":false,\n"
+            "       \"earningtransactionsonly\":true,\n"
+            "       \"aggregateearnings\": {\n"
+            "           \"longtermthreshold\": numberofdays\n"
+            "       },\n"
+            "       \"costbasisdata\": {\n"
+            "           \"costbasistype\":0 | 1 | 2 | 3 | 4,                    0 = FIFO, 1 = LIFO, 2 = HIFO, 3 = WAFIFO (weighted avg FIFO), 4 = LOWIFO (lowest in first out)\n"
+            "           \"fiatcurrency\":\"dai.veth\" | \"eurc.veth\",\n"
+            "           \"trackcostbasisaddresses\":[\"address1\"],\n"
+            "           \"entries\":\n"
+            "           {\n"
+            "               \"currencyiaddress\": [\n"
+            "                   {"
+            "                       \"timestamp\": 1697938855,\n"
+            "                       \"costbasis\": 0.76948382,\n"
+            "                       \"amount\": 100.01234567\n"
+            "                   }\n"
+            "               ]\n"
+            "           }\n"
+            "       },\n"
+            "       \"offchaintransfers\": {\n"
+            "           \"{\n"
+            "               \"fromsystem\": \"VRSC\",\n"
+            "               \"tosystem\": \"VETH\",\n"
+            "               \"address\": \"destinationaddress\",\n"
+            "               \"exportid\": \"c06768f33978230dbd4203d99b7e68c6b59f7e41c8587909a9e32673be73a90f\",\n"
+            "               \"rtindex\": 0,\n"
+            "               \"currencies\": [\n"
+            "                   {\n"
+            "                       \"currency\": \"i5w5MuNik5NtLcYmNzcvaoixooEebB6MGV\",\n"
+            "                       \"timestamp\": 1539487305,\n"
+            "                       \"datetime\": \"2018-10-14, 08:5513:07\",\n"
+            "                       \"costbasis\": 0.12000000,\n"
+            "                       \"amount\": 10.00010000,\n"
+            "                       \"lotbasis\": 1.20001200\n"
+            "                   }\n"
+            "               ],\n"
+            "               \"totalamount\": 10.00010000,\n"
+            "               \"totalfiatcostbasis\": 1.20001200,\n"
+            "            }\"\n"
+            "       },\n"
+            "       \"nativeprices\": [\n"
+            "           \"{\n"
+            "               \"2025-01-01\": 1.5\n"
+            "            },\"\n"
+            "           \"{\n"
+            "               \"2025-01-02\": 1.6\n"
+            "            },...\"\n"
+            "       ]\n"
+            "   }\n"
             "2. count          (numeric, optional, default=10) The number of transactions to return\n"
             "3. from           (numeric, optional, default=0) The number of transactions to skip\n"
             "4. includeWatchonly (bool, optional, default=false) Include transactions to watchonly addresses (see 'importaddress')\n"

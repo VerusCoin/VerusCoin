@@ -1923,16 +1923,28 @@ public:
 class CCostBasisTracker
 {
 public:
+    enum CostBasisTypes {
+        FIFO = 0,
+        LIFO = 1,
+        HIFO = 2,
+        WAFIFO = 3,
+        LOWIFO
+    };
+
+    int32_t type;
+    bool setCurrentCostBasisOnReceipt;
+    uint160 fiatDefaultID;
     std::map<std::tuple<uint160,uint32_t,uint64_t>,int64_t> costBasisMap;
     std::set<uint160> systemCBOnExport;
     std::set<CTxDestination> trackCBSendReceive;
     std::map<std::tuple<uint160, CTxDestination, uint32_t, uint256, int32_t>, std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>>> outgoingEvents;
     std::map<std::tuple<uint160, uint256, int32_t>, std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>>> incomingExports;
 
-    CCostBasisTracker() {}
+    CCostBasisTracker(int32_t Type=FIFO, bool currentCostBasisOnReceipt=false);
     CCostBasisTracker(const UniValue &uni);
     void PutCurrency(const uint160 &currencyID, uint32_t blockTime, int64_t costBasis, int64_t amount);
-    std::vector<std::tuple<uint32_t, int64_t, int64_t>> TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft, uint32_t curBlockTime, bool zeroFill=false);
+    std::vector<std::tuple<uint32_t, int64_t, int64_t>> TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft, uint32_t curBlockTime,
+                                                                     bool zeroFill=false, int32_t costBasisType=-1);
     UniValue ToUniValue() const;
 
     static std::string FiatDefaultName()
@@ -1940,7 +1952,10 @@ public:
         return "dai.veth";
     }
 
-    static uint160 FiatDefault();
+    uint160 FiatDefault() const
+    {
+        return fiatDefaultID;
+    }
 
     bool AddIncomingEvent(const uint160 &fromSystem,
                           const uint256 &txid,
@@ -1953,7 +1968,10 @@ public:
                           int32_t rtIndex,
                           const std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> &costBasisData);
 
-    int64_t GetNativeCostBasisFiat(const CPBaaSNotarization &importNotarization, const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight, const uint160 &fiatCurrency=FiatDefault()) const;
+
+    int64_t WeightedAverageCostBasis(const uint160 &currencyID, uint32_t curBlockTime) const;
+    int64_t GetNativeCostBasisFiat(const CPBaaSNotarization &importNotarization, const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight) const;
+    int64_t GetNativeCostBasisFiat(const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight) const;
 
     int64_t GetConversionCostBasisNative(const CPBaaSNotarization &importNotarization, const uint160 &convertToCurrencyID, uint32_t nHeight) const;
 };
@@ -1968,7 +1986,6 @@ public:
         defaultShortLongTermThresholdSeconds = 31536000,
         threeYearThreshold = 94608000
     };
-    uint160 fiatCurrencyID;
     uint32_t shortLongTermThresholdSeconds;
     CCurrencyValueMap validationEarnings;
     int64_t validationEarningsFiat;
@@ -1978,12 +1995,24 @@ public:
     CCurrencyValueMap longTermGainLoss;
     int64_t longTermGainLossFiat;
 
-    CEarningsTracker(const uint160 &FiatCurrency=CCostBasisTracker::FiatDefault(), uint32_t ShortLongThresholdSeconds=defaultShortLongTermThresholdSeconds) :
-        fiatCurrencyID(FiatCurrency), shortLongTermThresholdSeconds(ShortLongThresholdSeconds), validationEarningsFiat(0), feesInFiat(0), shortTermGainLossFiat(0), longTermGainLossFiat(0) {}
+    int64_t longTermConversionToBasis;
+    int64_t longTermCostBasis;
+    int64_t shortTermConversionToBasis;
+    int64_t shortTermCostBasis;
+
+    CEarningsTracker(uint32_t ShortLongThresholdSeconds=defaultShortLongTermThresholdSeconds) :
+        shortLongTermThresholdSeconds(ShortLongThresholdSeconds),
+        validationEarningsFiat(0),
+        feesInFiat(0),
+        shortTermGainLossFiat(0),
+        longTermGainLossFiat(0),
+        longTermConversionToBasis(0),
+        longTermCostBasis(0),
+        shortTermConversionToBasis(0),
+        shortTermCostBasis(0)
+        {}
 
     CEarningsTracker(const UniValue &uni);
-
-    uint160 FiatCurrencyID() const;
 
     UniValue ToUniValue() const;
 
@@ -1994,9 +2023,9 @@ public:
         feesInFiat += valueFiat;
     }
 
-    void AddShortTerm(int64_t valueFiat);
+    void AddShortTerm(int64_t newValueFiat, int64_t costBasisFiat);
 
-    void AddLongTerm(int64_t valueFiat);
+    void AddLongTerm(int64_t newValueFiat, int64_t costBasisFiat);
 };
 
 struct CCcontract_info;

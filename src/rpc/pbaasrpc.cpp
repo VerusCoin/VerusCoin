@@ -1390,7 +1390,7 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
         {
             std::map<std::string, int64_t> nativePriceMap;
             int64_t nativeFromCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FirstCurrency(), nHeight);
-            int64_t fiatFromCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeFromCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
+            int64_t fiatFromCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeFromCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight));
 
             importOutputs.pushKV("currentcostbasisnative", ValueFromAmount(nativeFromCostBasis));
             importOutputs.pushKV("currentcostbasisfiat", ValueFromAmount(fiatFromCostBasis));
@@ -1398,7 +1398,7 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
             int64_t nativeCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, convertToCurrency, nHeight);
             importOutputs.pushKV("newcostbasisnative", ValueFromAmount(nativeCostBasis));
 
-            int64_t fiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
+            int64_t fiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(nativeCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight));
             importOutputs.pushKV("newcostbasisfiat", ValueFromAmount(fiatCostBasis));
 
             if (pCurrenciesCostBases)
@@ -1494,7 +1494,7 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
                     int64_t currentFiatCostBasis = 0;
                     fromCostBasis.push_back({blockTime, 0, amountLeft});
                     // int64_t currentCostBasis = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FirstCurrency(), nHeight);
-                    // int64_t currentFiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(currentCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID()));
+                    // int64_t currentFiatCostBasis = CCoinbaseCurrencyState::NativeToReserveRaw(currentCostBasis, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight));
                     // fromCostBasis.push_back({blockTime, currentFiatCostBasis, amountLeft});
                 }
 
@@ -1531,20 +1531,20 @@ UniValue GetTransferImportProgress(const CTransaction &importTx, const CReserveT
                     if (longTermNewAmount)
                     {
                         importOutputs.pushKV("gainlosslongterm", ValueFromAmount(longTermNewCostBasis - initialLongTermCostBasis));
-                        pAggregateEarnings->AddLongTerm(longTermNewCostBasis - initialLongTermCostBasis);
+                        pAggregateEarnings->AddLongTerm(longTermNewCostBasis, initialLongTermCostBasis);
                     }
 
                     if (shortTermNewAmount)
                     {
                         importOutputs.pushKV("gainlossshortterm", ValueFromAmount(shortTermNewCostBasis - initialShortTermCostBasis));
-                        pAggregateEarnings->AddShortTerm(shortTermNewCostBasis - initialShortTermCostBasis);
+                        pAggregateEarnings->AddShortTerm(shortTermNewCostBasis, initialShortTermCostBasis);
                     }
 
                     // add fees
                     if (importNotarization.currencyState.GetReserveMap().count(rt.FeeCurrencyID()))
                     {
                         int64_t feeCostBasisNative = pCurrenciesCostBases->GetConversionCostBasisNative(importNotarization, rt.FeeCurrencyID(), nHeight);
-                        int64_t feeValueFiat = CCoinbaseCurrencyState::NativeToReserveRaw(rt.nFees, CCoinbaseCurrencyState::NativeToReserveRaw(feeCostBasisNative, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight, pAggregateEarnings->FiatCurrencyID())));
+                        int64_t feeValueFiat = CCoinbaseCurrencyState::NativeToReserveRaw(rt.nFees, CCoinbaseCurrencyState::NativeToReserveRaw(feeCostBasisNative, pCurrenciesCostBases->GetNativeCostBasisFiat(importNotarization, pNativePriceMap ? *pNativePriceMap : nativePriceMap, blockTime, nHeight)));
                         importOutputs.pushKV("gainlossfees", ValueFromAmount(feeValueFiat));
                         pAggregateEarnings->AddFees(feeValueFiat);
                     }
@@ -1800,7 +1800,13 @@ UniValue GetReserveTransferProgress(const CTransaction &tx, int outNum, const CR
                                                                 (pCurrenciesCostBases->systemCBOnExport.size() == 0 || pCurrenciesCostBases->systemCBOnExport.count(progressExport.destSystemID)))
                                                             {
                                                                 CAmount amountLeft = 0;
-                                                                std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases = pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(), rt.FirstValue(), amountLeft, blockIter->second->nTime, true);
+                                                                std::vector<std::tuple<uint32_t, int64_t, int64_t>> outGoingCostBases =
+                                                                        pCurrenciesCostBases->TakeCurrency(rt.FirstCurrency(),
+                                                                                                           rt.FirstValue(),
+                                                                                                           amountLeft,
+                                                                                                           blockIter->second->nTime,
+                                                                                                           true,
+                                                                                                           pCurrenciesCostBases->type == CCostBasisTracker::HIFO ? CCostBasisTracker::LOWIFO : pCurrenciesCostBases->type);
                                                                 std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>> cbEntries;
                                                                 for (auto &oneCostBasis : outGoingCostBases)
                                                                 {

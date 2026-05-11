@@ -538,7 +538,7 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
                             if (!(p.vData.size() &&
                                 (ccx = CCrossChainExport(p.vData[0])).IsValid() &&
                                 (ccx.sourceSystemID != ASSETCHAINS_CHAINID ||
-                                ccx.sourceHeightEnd < nMemPoolHeight)))
+                                ccx.sourceHeightEnd >= (nMemPoolHeight - 1))))
                             {
                                 transactionsToRemove.push_back(tx);
                                 oneRemoved = true;
@@ -553,7 +553,7 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
                             if (!(p.vData.size() &&
                                 (cci = CCrossChainImport(p.vData[0])).IsValid() &&
                                 (cci.sourceSystemID != ASSETCHAINS_CHAINID ||
-                                cci.sourceSystemHeight < nMemPoolHeight)))
+                                cci.sourceSystemHeight >= (nMemPoolHeight - 1))))
                             {
                                 transactionsToRemove.push_back(tx);
                                 oneRemoved = true;

@@ -772,7 +772,7 @@ bool CWallet::LoadCurrencyTrustMode(int trustMode)
 }
 
 // returns all key IDs that are destinations for UTXOs in the wallet
-std::set<CKeyID> CWallet::GetTransactionDestinationIDs()
+std::set<CKeyID> CWallet::GetTransactionDestinationIDs() const
 {
     std::vector<COutput> vecOutputs;
     std::set<CKeyID> setKeyIDs;
@@ -802,6 +802,23 @@ std::set<CKeyID> CWallet::GetTransactionDestinationIDs()
                     }
                 }
             }
+        }
+    }
+    return setKeyIDs;
+}
+
+// returns all CKeyIDs in the wallet that have any history at all
+std::set<CKeyID> CWallet::GetTransactionHistoryAddresses() const
+{
+    std::vector<COutput> vecOutputs;
+    std::set<CKeyID> setKeyIDs;
+
+    for (auto const &oneKey : CWallet::mapKeys)
+    {
+        std::vector<CAddressIndexDbEntry> freshIndex;
+        if (GetAddressIndex(oneKey.first, CScript::P2PKH, freshIndex) && freshIndex.size())
+        {
+            setKeyIDs.insert(oneKey.first);
         }
     }
     return setKeyIDs;

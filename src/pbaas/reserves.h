@@ -21,6 +21,7 @@
 #include "pubkey.h"
 #include "amount.h"
 #include "lrucache.h"
+#include "prevector.h"
 
 #ifndef SATOSHIDEN
 #define SATOSHIDEN ((uint64_t)100000000L)
@@ -46,6 +47,67 @@ extern uint32_t PBAAS_MAINDEFI3_HEIGHT;
 extern uint32_t PBAAS_CLEARCONVERT_HEIGHT;
 extern uint32_t PBAAS_LASTKNOWNCLEARORACLE_HEIGHT;
 extern uint32_t PBAAS_OPTIMIZE_ETH_HEIGHT;
+
+typedef prevector<28, unsigned char> CScriptBase;
+
+class CKeyID;
+class CScript;
+class CKeyStore;
+
+class CNoDestination {
+public:
+    friend bool operator==(const CNoDestination &a, const CNoDestination &b) { return true; }
+    friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
+};
+
+/** A reference to a CScript: the Hash160 of its serialization (see script.h) */
+class CScriptID : public uint160
+{
+public:
+    CScriptID() : uint160() {}
+    CScriptID(const CScript& in);
+    CScriptID(const uint160& in) : uint160(in) {}
+};
+
+uint160 GetNameID(const std::string &Name, const uint160 &parent);
+
+/** A reference to an identity: the Hash160 of a specific serialization if its name and parent chain (see script.h) */
+class CIdentityID : public uint160
+{
+public:
+    CIdentityID() : uint160() {}
+    CIdentityID(const std::string& in, const uint160 &parent=uint160()) : uint160(GetNameID(in, parent)) {}
+    CIdentityID(const uint160& in) : uint160(in) {}
+};
+
+/** A reference to a quantum public key: the Hash160 of its serialization (see script.h), which it is indexed by in an output */
+class CQuantumID : public uint160
+{
+public:
+    CQuantumID() : uint160() {}
+    CQuantumID(const std::string& in, const uint160 &parent=uint160()) : uint160(GetNameID(in, parent)) {}
+    CQuantumID(const uint160& in) : uint160(in) {}
+};
+
+/** A reference to an index only address type, not used in the API or externally, but
+ * reserved as an index for specific types of transaction outputs that can then be queried
+ * and assumed to be valid and checked if found.
+ * CQuantum public keys are indexed by a CIndexID that represents a hash of the quantum public key. */
+class CIndexID : public uint160
+{
+public:
+    CIndexID() : uint160() {}
+    CIndexID(const uint160& in) : uint160(in) {}
+};
+
+/**
+ * A txout script template with a specific destination. It is either:
+ *  * CNoDestination: no destination set
+ *  * CKeyID: TX_PUBKEYHASH destination
+ *  * CScriptID: TX_SCRIPTHASH destination
+ *  A CTxDestination is the internal data type encoded in a bitcoin address
+ */
+typedef boost::variant<CNoDestination, CPubKey, CKeyID, CScriptID, CIdentityID, CIndexID, CQuantumID> CTxDestination;
 
 // reserve output is a special kind of token output that does not have to carry it's identifier, as it
 // is always assumed to be the reserve currency of the current chain.
@@ -1861,12 +1923,28 @@ public:
 class CCostBasisTracker
 {
 public:
-    std::multimap<std::pair<uint160,uint32_t>,std::pair<int64_t,int64_t>> costBasisMap;
+    enum CostBasisTypes {
+        FIFO = 0,
+        LIFO = 1,
+        HIFO = 2,
+        WAFIFO = 3,
+        LOWIFO
+    };
 
-    CCostBasisTracker() {}
+    int32_t type;
+    bool setCurrentCostBasisOnReceipt;
+    uint160 fiatDefaultID;
+    std::map<std::tuple<uint160,uint32_t,uint64_t>,int64_t> costBasisMap;
+    std::set<uint160> systemCBOnExport;
+    std::set<CTxDestination> trackCBSendReceive;
+    std::map<std::tuple<uint160, CTxDestination, uint32_t, uint256, int32_t>, std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>>> outgoingEvents;
+    std::map<std::tuple<uint160, uint256, int32_t>, std::vector<std::tuple<uint160, uint32_t, int64_t, int64_t>>> incomingExports;
+
+    CCostBasisTracker(int32_t Type=FIFO, bool currentCostBasisOnReceipt=false);
     CCostBasisTracker(const UniValue &uni);
     void PutCurrency(const uint160 &currencyID, uint32_t blockTime, int64_t costBasis, int64_t amount);
-    std::vector<std::tuple<uint32_t, int64_t, int64_t>> TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft);
+    std::vector<std::tuple<uint32_t, int64_t, int64_t>> TakeCurrency(const uint160 &currencyID, int64_t amount, int64_t &amountLeft, uint32_t curBlockTime,
+                                                                     bool zeroFill=false, int32_t costBasisType=-1);
     UniValue ToUniValue() const;
 
     static std::string FiatDefaultName()
@@ -1874,9 +1952,26 @@ public:
         return "dai.veth";
     }
 
-    static uint160 FiatDefault();
+    uint160 FiatDefault() const
+    {
+        return fiatDefaultID;
+    }
 
-    int64_t GetNativeCostBasisFiat(const CPBaaSNotarization &importNotarization, const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight, const uint160 &fiatCurrency=FiatDefault()) const;
+    bool AddIncomingEvent(const uint160 &fromSystem,
+                          const uint256 &txid,
+                          int32_t rtIndex,
+                          const std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> &costBasisData);
+    bool AddOutgoingEvent(const uint160 &toSystem,
+                          const CTxDestination &toAddress,
+                          uint32_t atTime,
+                          const uint256 &txid,
+                          int32_t rtIndex,
+                          const std::vector<std::tuple<uint160,uint32_t,int64_t,int64_t>> &costBasisData);
+
+
+    int64_t WeightedAverageCostBasis(const uint160 &currencyID, uint32_t curBlockTime) const;
+    int64_t GetNativeCostBasisFiat(const CPBaaSNotarization &importNotarization, const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight) const;
+    int64_t GetNativeCostBasisFiat(const std::map<std::string, int64_t> &nativePriceMap, uint32_t blockTime, uint32_t nHeight) const;
 
     int64_t GetConversionCostBasisNative(const CPBaaSNotarization &importNotarization, const uint160 &convertToCurrencyID, uint32_t nHeight) const;
 };
@@ -1888,9 +1983,9 @@ class CEarningsTracker
 {
 public:
     enum {
-        defaultShortLongTermThresholdSeconds = 31536000
+        defaultShortLongTermThresholdSeconds = 31536000,
+        threeYearThreshold = 94608000
     };
-    uint160 fiatCurrencyID;
     uint32_t shortLongTermThresholdSeconds;
     CCurrencyValueMap validationEarnings;
     int64_t validationEarningsFiat;
@@ -1900,12 +1995,24 @@ public:
     CCurrencyValueMap longTermGainLoss;
     int64_t longTermGainLossFiat;
 
-    CEarningsTracker(const uint160 &FiatCurrency=CCostBasisTracker::FiatDefault(), uint32_t ShortLongThresholdSeconds=defaultShortLongTermThresholdSeconds) :
-        fiatCurrencyID(FiatCurrency), shortLongTermThresholdSeconds(ShortLongThresholdSeconds), validationEarningsFiat(0), feesInFiat(0), shortTermGainLossFiat(0), longTermGainLossFiat(0) {}
+    int64_t longTermConversionToBasis;
+    int64_t longTermCostBasis;
+    int64_t shortTermConversionToBasis;
+    int64_t shortTermCostBasis;
+
+    CEarningsTracker(uint32_t ShortLongThresholdSeconds=defaultShortLongTermThresholdSeconds) :
+        shortLongTermThresholdSeconds(ShortLongThresholdSeconds),
+        validationEarningsFiat(0),
+        feesInFiat(0),
+        shortTermGainLossFiat(0),
+        longTermGainLossFiat(0),
+        longTermConversionToBasis(0),
+        longTermCostBasis(0),
+        shortTermConversionToBasis(0),
+        shortTermCostBasis(0)
+        {}
 
     CEarningsTracker(const UniValue &uni);
-
-    uint160 FiatCurrencyID() const;
 
     UniValue ToUniValue() const;
 
@@ -1916,9 +2023,9 @@ public:
         feesInFiat += valueFiat;
     }
 
-    void AddShortTerm(int64_t valueFiat);
+    void AddShortTerm(int64_t newValueFiat, int64_t costBasisFiat);
 
-    void AddLongTerm(int64_t valueFiat);
+    void AddLongTerm(int64_t newValueFiat, int64_t costBasisFiat);
 };
 
 struct CCcontract_info;

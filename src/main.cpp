@@ -3892,6 +3892,19 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     std::vector<CSpentIndexDbEntry> spentIndex;
     std::map<CAddressReserveBalanceKey, CAddressReserveBalanceValue> reserveBalanceUpdates;
 
+    // Fix from Bitcoin via Zcash:
+    // `txdata` must be declared before `control` so that, by C++ LIFO
+    // destruction of automatic objects, ~CCheckQueueControl (which calls
+    // Wait() to join the script-verify worker threads) runs while `txdata`
+    // is still alive. Workers hold non-owning `PrecomputedTransactionData *`
+    // pointers into this vector via `CScriptCheck::txdata`; if `txdata` were
+    // destroyed first, those workers would dereference freed memory.
+    // The `reserve()` is also required so that subsequent `emplace_back`
+    // calls in the loop below do not reallocate and invalidate the pointers
+    // already handed to in-flight workers. See CVE-2024-52911.
+    std::vector<PrecomputedTransactionData> txdata;
+    txdata.reserve(block.vtx.size());
+
     CCheckQueueControl<CScriptCheck> control(fExpensiveChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
     CCurrencyDefinition newThisChain;
     std::vector<uint256> vOrphanErase;
@@ -4077,9 +4090,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         std::map<uint160, int32_t> currencyExportTransferCount;
         std::map<uint160, int32_t> identityExportTransferCount;
         bool isPBaaS = CConstVerusSolutionVector::GetVersionByHeight(nHeight) >= CActivationHeight::ACTIVATE_PBAAS;
-
-        std::vector<PrecomputedTransactionData> txdata;
-        txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
 
         // duplicate checks combining identity reservation and imports as well as ID and currency exports
         // in addition to those done in ContextualCheckBlock, as we can expect valid prior block dependencies when we are here that will

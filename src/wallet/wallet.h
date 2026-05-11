@@ -1145,7 +1145,8 @@ public:
     bool LoadIdentityTrust(const CIdentityID &idID, const CRating &trust);
     bool LoadIdentityTrustMode(int trustMode);
 
-    virtual std::set<CKeyID> GetTransactionDestinationIDs();
+    virtual std::set<CKeyID> GetTransactionDestinationIDs() const;
+    virtual std::set<CKeyID> GetTransactionHistoryAddresses() const;
 
     //! Adds a destination data tuple to the store, and saves it to disk
     bool AddDestData(const CTxDestination &dest, const std::string &key, const std::string &value);

@@ -642,9 +642,11 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
 
     std::set<CKeyID> idAddresses;
     std::set<CKeyID> utxoAddresses;
+    std::set<CKeyID> historyAddresses;
 
     idAddresses = pwalletMain->GetIdentityKeyIDs();
     utxoAddresses = pwalletMain->GetTransactionDestinationIDs();
+    historyAddresses = pwalletMain->GetTransactionHistoryAddresses();
 
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
         const CKeyID &keyid = it->second;
@@ -662,6 +664,12 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
             if (idAddresses.count(keyid))
             {
                 strAddr = strAddr + ", +ID(s)";
+                emptyAddr = false;
+            }
+
+            if (historyAddresses.count(keyid))
+            {
+                strAddr = strAddr + ", +HIST";
                 emptyAddr = false;
             }
 

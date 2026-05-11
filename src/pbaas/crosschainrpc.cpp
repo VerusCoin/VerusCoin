@@ -49,6 +49,11 @@ using namespace std;
 extern string PBAAS_HOST;
 extern string PBAAS_USERPASS;
 extern int32_t PBAAS_PORT;
+// Solana keeper endpoint, populated by `ConfigureSolBridge()`. See
+// komodo_globals.h for the documented use.
+extern string SOLANA_HOST;
+extern string SOLANA_USERPASS;
+extern int32_t SOLANA_PORT;
 extern std::string VERUS_CHAINNAME;
 
 uint32_t PBAAS_MAINDEFI3_HEIGHT = 2553500;
@@ -223,9 +228,21 @@ UniValue RPCCallRoot(const string& strMethod, const UniValue& params, int timeou
     map<string, string> settings;
     map<string, vector<string>> settingsmulti;
 
+    // Fast path 1: Ethereum bridge (existing behavior). PBAAS_* globals
+    // are populated by `ConfigureEthBridge()` when a "veth" gateway
+    // identity is registered.
     if (PBAAS_HOST != "" && PBAAS_PORT != 0)
     {
         return RPCCall(strMethod, params, PBAAS_USERPASS, PBAAS_PORT, PBAAS_HOST, timeout);
+    }
+    // Fast path 2: Solana bridge keeper. SOLANA_* globals are populated
+    // by `ConfigureSolBridge()` when a "sol" gateway identity is
+    // registered. Only one of the two bridges is configured per
+    // daemon today; if both ever coexist, ETH wins (matches the
+    // pre-Solana cache-priority of ETH).
+    if (SOLANA_HOST != "" && SOLANA_PORT != 0)
+    {
+        return RPCCall(strMethod, params, SOLANA_USERPASS, SOLANA_PORT, SOLANA_HOST, timeout);
     }
     else if ((_IsVerusActive() &&
               ReadConfigFile("veth", settings, settingsmulti)) ||
@@ -249,6 +266,29 @@ UniValue RPCCallRoot(const string& strMethod, const UniValue& params, int timeou
                 PBAAS_HOST = "127.0.0.1";
             }
             return RPCCall(strMethod, params, PBAAS_USERPASS, PBAAS_PORT, PBAAS_HOST, timeout);
+        }
+    }
+    // Fallback for the Solana bridge: if globals weren't set at startup
+    // (e.g., the keeper started after the daemon), try reading sol.conf
+    // here. Mirrors the veth.conf fallback above.
+    else if (_IsVerusActive() && ReadConfigFile("sol", settings, settingsmulti))
+    {
+        auto userIt = settingsmulti.find("-rpcuser");
+        auto passIt = settingsmulti.find("-rpcpassword");
+        auto portIt = settingsmulti.find("-rpcport");
+        auto hostIt = settingsmulti.find("-rpchost");
+        if (userIt != settingsmulti.end() &&
+            passIt != settingsmulti.end() &&
+            portIt != settingsmulti.end())
+        {
+            SOLANA_USERPASS = userIt->second[0] + ":" + passIt->second[0];
+            SOLANA_PORT = atoi(portIt->second[0]);
+            SOLANA_HOST = hostIt != settingsmulti.end() ? hostIt->second[0] : "127.0.0.1";
+            if (!SOLANA_HOST.size())
+            {
+                SOLANA_HOST = "127.0.0.1";
+            }
+            return RPCCall(strMethod, params, SOLANA_USERPASS, SOLANA_PORT, SOLANA_HOST, timeout);
         }
     }
     return UniValue(UniValue::VNULL);
@@ -720,10 +760,6 @@ CCurrencyDefinition::CCurrencyDefinition(const UniValue &obj) :
                 nVersion = PBAAS_VERSION_INVALID;
                 return;
             }
-            else if (IsGateway())
-            {
-                gatewayID = GetID();
-            }
             uint160 converterParent = GetID();
             std::string cleanGatewayName = CleanName(gatewayConverterName, converterParent, true);
             uint160 converterID = GetID(cleanGatewayName, converterParent);
@@ -733,6 +769,16 @@ CCurrencyDefinition::CCurrencyDefinition(const UniValue &obj) :
                 nVersion = PBAAS_VERSION_INVALID;
                 return;
             }
+        }
+        // A gateway is its own gateway endpoint regardless of whether it
+        // co-launches a converter currency. PBAAS_TESTMODE allows skipping
+        // the converter (see definecurrency RPC), so populate gatewayID
+        // unconditionally for IsGateway() — otherwise CCrossChainImport
+        // outputs end up with a null sourceSystemID and the reserve-tx
+        // descriptor rejects them as invalid.
+        if (IsGateway())
+        {
+            gatewayID = GetID();
         }
 
         if (IsPBaaSChain() || IsGateway() || IsGatewayConverter())
@@ -797,9 +843,12 @@ CCurrencyDefinition::CCurrencyDefinition(const UniValue &obj) :
         }
 
         proofProtocol = (EProofProtocol)uni_get_int(find_value(obj, "proofprotocol"), (int32_t)PROOF_PBAASMMR);
-        if (proofProtocol != PROOF_PBAASMMR && proofProtocol != PROOF_CHAINID && proofProtocol != PROOF_ETHNOTARIZATION)
+        if (proofProtocol != PROOF_PBAASMMR && proofProtocol != PROOF_CHAINID &&
+            proofProtocol != PROOF_ETHNOTARIZATION && proofProtocol != PROOF_SOLANANOTARIZATION)
         {
-            LogPrintf("%s: proofprotocol must be %d, %d, or %d\n", __func__, (int)PROOF_PBAASMMR, (int)PROOF_CHAINID, (int)PROOF_ETHNOTARIZATION);
+            LogPrintf("%s: proofprotocol must be %d, %d, %d, or %d\n", __func__,
+                      (int)PROOF_PBAASMMR, (int)PROOF_CHAINID,
+                      (int)PROOF_ETHNOTARIZATION, (int)PROOF_SOLANANOTARIZATION);
             nVersion = PBAAS_VERSION_INVALID;
             return;
         }
@@ -1258,7 +1307,7 @@ CCurrencyDefinition::CCurrencyDefinition(const UniValue &obj) :
 
             if (!rewards.size())
             {
-                LogPrintf("%s: PBaaS chain does not have valid rewards eras");
+                LogPrintf("%s: PBaaS chain does not have valid rewards eras\n", __func__);
                 nVersion = PBAAS_VERSION_INVALID;
             }
         }

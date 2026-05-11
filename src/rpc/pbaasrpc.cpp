@@ -14153,6 +14153,27 @@ UniValue definecurrency(const UniValue& params, bool fHelp)
     }
     tb.AddTransparentOutput(launchIdentity.IdentityUpdateOutputScript(height + 1), 0);
 
+    // if it's a mapped currency, we don't need to add anything but the definition with no launch period
+    bool isMappedCurrency = newChain.IsToken() &&
+                            !newChain.IsGateway() && !newChain.IsPBaaSChain() &&
+                            !newChain.IsGatewayConverter() &&
+                            newChain.nativeCurrencyID.IsValid() &&
+                            (parentCurrency.IsGateway() || parentCurrency.GetID() == ASSETCHAINS_CHAINID) &&
+                            newChain.systemID != ASSETCHAINS_CHAINID;
+
+    // Gateways, self-currency definitions, and mapped currencies launch
+    // immediately rather than via the prelaunch staging period. The startBlock
+    // override must happen BEFORE the CCurrencyDefinition output is serialized
+    // — otherwise the on-chain definition keeps the validation-default
+    // startBlock (~ height + DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA) and the
+    // accompanying notarization, which is marked launch-complete, fails the
+    // pbaas.cpp:CheckImport "must be for block 1 definitions or gateway
+    // currency" check (importCurrency.startBlock <= height becomes false).
+    if (newChainID == ASSETCHAINS_CHAINID || newChain.IsGateway() || isMappedCurrency)
+    {
+        newChain.startBlock = 1;
+    }
+
     // now, create the currency definition output
     CCcontract_info CC;
     CCcontract_info *cp;
@@ -14173,14 +14194,6 @@ UniValue definecurrency(const UniValue& params, bool fHelp)
     CCoinbaseCurrencyState newCurrencyState;
     uint32_t lastImportHeight = newChain.IsPBaaSChain() || newChain.IsGateway() ? 1 : height;
 
-    // if it's a mapped currency, we don't need to add anything but the definition with no launch period
-    bool isMappedCurrency = newChain.IsToken() &&
-                            !newChain.IsGateway() && !newChain.IsPBaaSChain() &&
-                            !newChain.IsGatewayConverter() &&
-                            newChain.nativeCurrencyID.IsValid() &&
-                            (parentCurrency.IsGateway() || parentCurrency.GetID() == ASSETCHAINS_CHAINID) &&
-                            newChain.systemID != ASSETCHAINS_CHAINID;
-
     CAmount totalLaunchFee = ConnectedChains.ThisChain().GetCurrencyRegistrationFee(newChain.options);
     CAmount notaryFeeShare = 0;
 
@@ -14192,6 +14205,7 @@ UniValue definecurrency(const UniValue& params, bool fHelp)
 
         if (newChain.proofProtocol == newChain.PROOF_PBAASMMR ||
             newChain.proofProtocol == newChain.PROOF_ETHNOTARIZATION ||
+            newChain.proofProtocol == newChain.PROOF_SOLANANOTARIZATION ||
             newChain.proofProtocol == newChain.PROOF_CHAINID)
         {
             dests = std::vector<CTxDestination>({pk.GetID()});

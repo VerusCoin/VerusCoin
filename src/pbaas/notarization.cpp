@@ -1250,7 +1250,7 @@ bool CPBaaSNotarization::NextNotarizationInfo(const CCurrencyDefinition &sourceS
 
     if (!externalSystemID.IsNull())
     {
-        hashType = (CCurrencyDefinition::EHashTypes)externalSystemDef.proofProtocol;
+        hashType = CCurrencyDefinition::ProofProtocolHashType(externalSystemDef.proofProtocol);
     }
 
     CNativeHashWriter hwPrevNotarization;
@@ -7737,7 +7737,7 @@ bool CPBaaSNotarization::ConfirmOrRejectNotarizations(CWallet *pWallet,
 
     std::string errorPrefix(strprintf("%s: ", __func__));
 
-    CCurrencyDefinition::EHashTypes hashType = (CCurrencyDefinition::EHashTypes)externalSystem.chainDefinition.proofProtocol;
+    CCurrencyDefinition::EHashTypes hashType = CCurrencyDefinition::ProofProtocolHashType(externalSystem.chainDefinition.proofProtocol);
 
     uint32_t height, signingHeight;
     uint160 SystemID = externalSystem.chainDefinition.GetID();
@@ -9236,7 +9236,8 @@ std::vector<uint256> CPBaaSNotarization::SubmitFinalizedNotarizations(const CRPC
                     proofIt->second != CProofRoot::GetProofRoot(proofIt->second.rootHeight))
                 {
                     isValid = false;
-                    if (pNotaryCurrency->proofProtocol == CCurrencyDefinition::PROOF_ETHNOTARIZATION)
+                    if (pNotaryCurrency->proofProtocol == CCurrencyDefinition::PROOF_ETHNOTARIZATION ||
+                        pNotaryCurrency->proofProtocol == CCurrencyDefinition::PROOF_SOLANANOTARIZATION)
                     {
                         isPotentialRevoke = true;
                     }
@@ -9672,7 +9673,7 @@ std::vector<uint256> CPBaaSNotarization::SubmitFinalizedNotarizations(const CRPC
         }
         if (signatureEvidence.evidence.chainObjects.size())
         {
-            CCurrencyDefinition::EHashTypes hashType = (CCurrencyDefinition::EHashTypes)externalSystem.chainDefinition.proofProtocol;
+            CCurrencyDefinition::EHashTypes hashType = CCurrencyDefinition::ProofProtocolHashType(externalSystem.chainDefinition.proofProtocol);
             CNativeHashWriter hw(hashType);
             // we are earned notarizations, so it will not be mirrored and can be used as is
             uint256 objHash = (hw << cnd.vtx[cnd.lastConfirmed].second).GetHash();
@@ -9702,10 +9703,13 @@ std::vector<uint256> CPBaaSNotarization::SubmitFinalizedNotarizations(const CRPC
                     (crosschainCND.vtx[crosschainCND.lastConfirmed].second.IsDefinitionNotarization() &&
                      crosschainCND.vtx[crosschainCND.lastConfirmed].second.IsSameChain())) ||
                    (externalSystem.chainDefinition.proofProtocol != CCurrencyDefinition::PROOF_ETHNOTARIZATION &&
+                    externalSystem.chainDefinition.proofProtocol != CCurrencyDefinition::PROOF_SOLANANOTARIZATION &&
                     (newConfirmedNotarization.proofRoots[systemID].rootHeight - crosschainCND.vtx[crosschainCND.lastConfirmed].second.proofRoots[systemID].rootHeight) >
                      (blocksBeforeModuloExtension - (blocksBeforeModuloExtension >> 2))));
 
-    bool amWitness = externalSystem.chainDefinition.proofProtocol == CCurrencyDefinition::PROOF_ETHNOTARIZATION && notarySet.count(VERUS_NOTARYID);
+    bool amWitness = (externalSystem.chainDefinition.proofProtocol == CCurrencyDefinition::PROOF_ETHNOTARIZATION ||
+                      externalSystem.chainDefinition.proofProtocol == CCurrencyDefinition::PROOF_SOLANANOTARIZATION) &&
+                     notarySet.count(VERUS_NOTARYID);
 
     if (notaryRevokeID.IsNull() && !submit)
     {
@@ -11402,9 +11406,10 @@ bool PreCheckFinalizeNotarization(const CTransaction &tx, int32_t outNum, CValid
 
     CNativeHashWriter hw(
         (pNotaryCurrency->IsGateway() &&
-        pNotaryCurrency->launchSystemID == ASSETCHAINS_CHAINID &&
-        pNotaryCurrency->proofProtocol == pNotaryCurrency->PROOF_ETHNOTARIZATION) ?
-            notaryCurrencyDef.PROOF_ETHNOTARIZATION :
+         pNotaryCurrency->launchSystemID == ASSETCHAINS_CHAINID &&
+         (pNotaryCurrency->proofProtocol == pNotaryCurrency->PROOF_ETHNOTARIZATION ||
+          pNotaryCurrency->proofProtocol == pNotaryCurrency->PROOF_SOLANANOTARIZATION)) ?
+            (CCurrencyDefinition::EProofProtocol)pNotaryCurrency->proofProtocol :
             pNotaryCurrency->PROOF_PBAASMMR);
 
     if (!notarization.SetMirror(false))
@@ -12173,7 +12178,7 @@ bool PreCheckFinalizeNotarization(const CTransaction &tx, int32_t outNum, CValid
             }
             if (LogAcceptCategory("notarization") && LogAcceptCategory("verbose"))
             {
-                LogPrintf("%s: invalid pending finalization on transaction: %s\n");
+                LogPrintf("%s: invalid pending finalization on transaction\n", __func__);
             }
             return state.Error("insufficient evidence to create new pending finalization for notarization");
         }

@@ -1946,7 +1946,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 {
                     // until we have connected to the ETH bridge, after PBaaS has launched, we check each block to see if there is now an
                     // ETH bridge defined
-                    ConnectedChains.ConfigureEthBridge(true);
+                    if (!ConnectedChains.ConfigureEthBridge(true))
+                    {
+                        // Solana bridge fallback. ConfigureEthBridge returns
+                        // false when no "veth" gateway exists; in that case
+                        // try to wire up a "sol" gateway / keeper instead.
+                        ConnectedChains.ConfigureSolBridge(true);
+                    }
                 }
 
                 ConnectedChains.CheckOracleUpgrades();

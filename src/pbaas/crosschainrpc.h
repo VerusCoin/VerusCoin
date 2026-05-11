@@ -550,7 +550,8 @@ public:
         PROOF_CHAINID = 2,                  // if signed by the chain ID, that is considered proof
         PROOF_ETHNOTARIZATION = 3,          // proven by Ethereum notarization
         PROOF_LASTPROTOCOL = 3,
-        PROOF_KOMODONOTARIZATION = 4        // Komodo protocol is not valid until someone from Komodo finishes it
+        PROOF_KOMODONOTARIZATION = 4,       // Komodo protocol is not valid until someone from Komodo finishes it
+        PROOF_SOLANANOTARIZATION = 5        // proven by Solana notarization, Keccak-form ECDSA signatures verified on-chain
     };
 
     enum EHashTypes
@@ -563,6 +564,22 @@ public:
         HASH_SHA256 = 5,
         HASH_LASTTYPE = 5
     };
+
+    // Maps an EProofProtocol value to the EHashTypes its signatures are emitted with.
+    // The original design aligned the numeric values (PROOF_PBAASMMR=1 ↔ HASH_BLAKE2BMMR=1,
+    // PROOF_ETHNOTARIZATION=3 ↔ HASH_KECCAK=3, PROOF_KOMODONOTARIZATION=4 ↔ HASH_SHA256D=4)
+    // so callers could static_cast directly. PROOF_SOLANANOTARIZATION=5 lands on HASH_SHA256=5
+    // by coincidence, but Solana actually signs with Keccak (matching the EVM bridge), so it
+    // must be remapped explicitly here. All four sites that previously did `(EHashTypes)pp`
+    // now go through this helper.
+    static EHashTypes ProofProtocolHashType(int proofProtocol)
+    {
+        if (proofProtocol == PROOF_SOLANANOTARIZATION)
+        {
+            return HASH_KECCAK;
+        }
+        return (EHashTypes)proofProtocol;
+    }
 
     enum EQueryOptions
     {
@@ -1558,7 +1575,11 @@ public:
     {
         TYPE_PBAAS=1,                       // Verus and other PBaaS chain proof root type
         TYPE_ETHEREUM=2,                    // Ethereum proof root with patricia tree
-        TYPE_KOMODO=3                       // Komodo MoMoM proof root
+        TYPE_KOMODO=3,                      // Komodo MoMoM proof root
+        TYPE_SOLANA=4                       // Solana proof root: Keccak-hashed CPBaaSNotarization,
+                                            // 13-of-N notary ECDSA quorum verified on Solana via
+                                            // sol_secp256k1_recover. No equivalent of gasPrice — the
+                                            // Solana side uses prioritization fees, not per-tx gas.
     };
     int16_t version;                        // to enable future data types with various functions
     int16_t type;                           // type of proof root
@@ -1673,7 +1694,7 @@ public:
     }
 
     CNativeHashWriter(CCurrencyDefinition::EProofProtocol proofProtocol, const unsigned char *personal=nullptr) :
-        CNativeHashWriter((CCurrencyDefinition::EHashTypes)proofProtocol, personal) {}
+        CNativeHashWriter(CCurrencyDefinition::ProofProtocolHashType(proofProtocol), personal) {}
 
     ~CNativeHashWriter()
     {

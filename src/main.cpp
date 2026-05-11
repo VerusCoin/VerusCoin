@@ -3839,7 +3839,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     if (CConstVerusSolutionVector::GetVersionByHeight(nHeight) >= CActivationHeight::ACTIVATE_PBAAS)
     {
-        ConnectedChains.ConfigureEthBridge();
+        // ETH bridge first; fall back to Solana keeper if no veth gateway.
+        if (!ConnectedChains.ConfigureEthBridge())
+        {
+            ConnectedChains.ConfigureSolBridge();
+        }
     }
 
     bool fExpensiveChecks = true;

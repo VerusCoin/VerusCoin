@@ -85,11 +85,6 @@ bool IsAfterBridgeCleanupWindowStarts(uint32_t chainTime)
     return chainTime >= PBAAS_BRIDGEEXPLOIT_CLEANUP_TIME_START;
 }
 
-bool IsAfterSecondBridgeCleanupWindowStarts(uint32_t chainTime)
-{
-    return chainTime >= PBAAS_BRIDGEEXPLOIT_CLEANUP_TIME_START;
-}
-
 /**
  * calculate number of bytes for the bitmask, and its number of non-zero bytes
  * each bit in the bitmask represents the availability of one output, but the

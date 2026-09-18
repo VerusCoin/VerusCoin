@@ -1872,6 +1872,5 @@ extern std::map<uint160,CTransferDestination> bridgeAdjustingAddresses;
 CCurrencyValueMap &BridgeCurrencyAdjustmentMap();
 bool IsBridgeCleanupWindowOpen(uint32_t chainTime);
 bool IsAfterBridgeCleanupWindowStarts(uint32_t chainTime);
-bool IsAfterSecondBridgeCleanupWindowStarts(uint32_t chainTime);
 
 #endif

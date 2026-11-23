@@ -109,6 +109,10 @@ public:
         piter->Seek(slKey);
     }
 
+    std::string GetRawKey() const { return piter->key().ToString(); }
+    void SeekRaw(const std::string& key) { piter->Seek(leveldb::Slice(key)); }
+    void CheckStatus() const { dbwrapper_private::HandleError(piter->status()); }
+
     void Next();
     void Prev();
 
@@ -252,9 +256,14 @@ public:
         return WriteBatch(batch, true);
     }
 
-    CDBIterator *NewIterator()
+    const leveldb::Snapshot *GetSnapshot() { return pdb->GetSnapshot(); }
+    void ReleaseSnapshot(const leveldb::Snapshot *snapshot) { pdb->ReleaseSnapshot(snapshot); }
+
+    CDBIterator *NewIterator(const leveldb::Snapshot *snapshot = nullptr)
     {
-        return new CDBIterator(*this, pdb->NewIterator(iteroptions));
+        leveldb::ReadOptions opts = iteroptions;
+        opts.snapshot = snapshot;
+        return new CDBIterator(*this, pdb->NewIterator(opts));
     }
 
     /**

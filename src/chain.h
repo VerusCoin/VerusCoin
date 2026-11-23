@@ -689,7 +689,7 @@ public:
         // them to CBlockTreeDB::LoadBlockIndexGuts() in txdb.cpp :)
     }
 
-    uint256 GetBlockHash() const
+    CBlockHeader GetDiskBlockHeader() const
     {
         CBlockHeader block;
         block.nVersion        = nVersion;
@@ -700,8 +700,10 @@ public:
         block.nBits           = nBits;
         block.nNonce          = nNonce;
         block.nSolution       = nSolution.nSolution();
-        return block.GetHash();
+        return block;
     }
+
+    uint256 GetBlockHash() const { return GetDiskBlockHeader().GetHash(); }
 
     std::string ToString() const
     {

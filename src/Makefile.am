@@ -42,7 +42,7 @@ BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/src/asn
 BITCOIN_INCLUDES += -I$(srcdir)/univalue/include
 
 LIBCURL=-lcurl
-LIBBITCOIN_SERVER=libbitcoin_server.a $(LIBCURL) -larchive
+LIBBITCOIN_SERVER=libbitcoin_server.a
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CLI=libbitcoin_cli.a
@@ -538,6 +538,7 @@ endif
 
 verusd_LDADD = \
   $(LIBBITCOIN_SERVER) \
+  $(LIBCURL) -larchive \
   $(LIBBITCOIN_COMMON) \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_UTIL) \
@@ -758,3 +759,5 @@ include Makefile.ktest.include
 #include Makefile.test.include
 #include Makefile.gtest.include
 endif
+
+EXTRA_DIST += startup_guts.h

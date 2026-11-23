@@ -6,7 +6,9 @@ bin_PROGRAMS += komodo-test
 komodo_test_SOURCES = \
 	test-komodo/main.cpp \
 	test-komodo/testutils.cpp \
-	test-komodo/test_cryptoconditions.cpp
+	test-komodo/test_cryptoconditions.cpp \
+	test-komodo/test_startup_chainproof.cpp \
+	test-komodo/test_startup_guts.cpp
 
 komodo_test_CPPFLAGS = $(verusd_CPPFLAGS)
 

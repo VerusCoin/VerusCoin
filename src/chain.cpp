@@ -5,6 +5,8 @@
 
 #include "chain.h"
 
+#include <stdexcept>
+
 using namespace std;
 
 /**
@@ -322,6 +324,61 @@ CChainPower::CChainPower(CBlockIndex *pblockIndex, const arith_uint256 &stake, c
      chainWork = work;
 }
 
+
+namespace {
+
+// Private exact fast path for the scaled ratio (value<<16)/divisor used by
+// the CChainPower comparison operators. Semantics-preserving only:
+//  - Guard requires __SIZEOF_INT128__, value.bits()<=112, divisor.bits()<=112,
+//    divisor!=0 and value<=divisor (max-divisor invariant), so (value<<16)
+//    fits in 128 bits and the quotient is <= 65536.
+//  - Any guard failure falls through to the ORIGINAL 256-bit expression
+//    (value<<16)/divisor unchanged, preserving uint256 shift-wrap semantics.
+//  - No header API change, no counters, no global mutable state, no logging.
+// With VERUS_CHAINPOWER_VERIFY defined, the ORIGINAL 256-bit expression is
+// recomputed and an explicit std::logic_error is thrown on any mismatch
+// (an assert would be compiled out under NDEBUG).
+arith_uint256 ScaledRatio16(const arith_uint256 &value, const arith_uint256 &divisor)
+{
+#ifdef __SIZEOF_INT128__
+    const arith_uint256 bigZero(0);
+    if (divisor != bigZero && value <= divisor &&
+        value.bits() <= 112 && divisor.bits() <= 112)
+    {
+        arith_uint256 result;
+        if (value == divisor)
+        {
+            result = arith_uint256((uint64_t)65536u);
+        }
+        else
+        {
+            // Verified public API limbs: low 64 bits via GetLow64(), limbs 2-3
+            // via (x >> 64).GetLow64().
+            unsigned __int128 num =
+                ((unsigned __int128)((value >> 64).GetLow64()) << 64)
+                | (unsigned __int128)value.GetLow64();
+            unsigned __int128 den =
+                ((unsigned __int128)((divisor >> 64).GetLow64()) << 64)
+                | (unsigned __int128)divisor.GetLow64();
+            num <<= 16; // (value<<16) fits in 128 bits by the guard
+            unsigned __int128 q = num / den; // <= 65536 by the guard
+            result = arith_uint256((uint64_t)q);
+        }
+#ifdef VERUS_CHAINPOWER_VERIFY
+        {
+            arith_uint256 ref = (value << 16) / divisor;
+            if (ref != result)
+                throw std::logic_error("VERUS_CHAINPOWER_VERIFY: ChainPowerExact fast path mismatch");
+        }
+#endif
+        return result;
+    }
+#endif
+    return (value << 16) / divisor;
+}
+
+} // anonymous namespace
+
 bool operator==(const CChainPower &p1, const CChainPower &p2)
 {
     arith_uint256 bigZero = arith_uint256(0);
@@ -329,8 +386,8 @@ bool operator==(const CChainPower &p1, const CChainPower &p2)
     arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
 
     // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) ==
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) ==
+            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
 }
 
 bool operator<(const CChainPower &p1, const CChainPower &p2)
@@ -340,8 +397,8 @@ bool operator<(const CChainPower &p1, const CChainPower &p2)
     arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
 
     // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) <
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) <
+            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
 }
 
 bool operator<=(const CChainPower &p1, const CChainPower &p2)
@@ -351,8 +408,8 @@ bool operator<=(const CChainPower &p1, const CChainPower &p2)
     arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
 
     // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) <=
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) <=
+            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
 }
 
 CChainPower CChainPower::ExpandCompactPower(uint256 compactPower, uint32_t height)

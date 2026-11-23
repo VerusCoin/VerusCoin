@@ -759,3 +759,5 @@ include Makefile.ktest.include
 #include Makefile.test.include
 #include Makefile.gtest.include
 endif
+
+EXTRA_DIST += startup_guts.h

@@ -225,8 +225,9 @@ namespace {
     {
         bool operator()(CBlockIndex *pa, CBlockIndex *pb) const {
             // First sort by most total work, ...
-            if (pa->chainPower > pb->chainPower) return false;
-            if (pa->chainPower < pb->chainPower) return true;
+            const int powerRelation = CompareChainPower(pa->chainPower, pb->chainPower);
+            if (powerRelation > 0) return false;
+            if (powerRelation < 0) return true;
 
             // ... then by earliest time received, ...
             if (pa->nSequenceId < pb->nSequenceId) return false;

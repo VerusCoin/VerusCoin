@@ -480,37 +480,34 @@ arith_uint256 ScaledRatio16(const arith_uint256 &value, const arith_uint256 &div
 
 } // anonymous namespace
 
-bool operator==(const CChainPower &p1, const CChainPower &p2)
+// Pair-local only: divisors depend on BOTH operands. Never cache by index.
+int CompareChainPower(const CChainPower &p1, const CChainPower &p2)
 {
     arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
+    const arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
+    const arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
+    const arith_uint256 score1 = ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor);
+    const arith_uint256 score2 = ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor);
+    // Each value <= its pair-selected divisor. Wrapping the numerator can
+    // only reduce it, so each quotient <= 65536 and each existing 256-bit
+    // sum <= 131072. Their signed low-limb difference is the exact relation.
+    const int delta = int(score1.GetLow64()) - int(score2.GetLow64());
+    return (delta > 0) - (delta < 0);
+}
 
-    // use up 16 bits for precision
-    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) ==
-            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
+bool operator==(const CChainPower &p1, const CChainPower &p2)
+{
+    return CompareChainPower(p1, p2) == 0;
 }
 
 bool operator<(const CChainPower &p1, const CChainPower &p2)
 {
-    arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
-
-    // use up 16 bits for precision
-    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) <
-            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
+    return CompareChainPower(p1, p2) < 0;
 }
 
 bool operator<=(const CChainPower &p1, const CChainPower &p2)
 {
-    arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
-
-    // use up 16 bits for precision
-    return (ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor)) <=
-            (ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor));
+    return CompareChainPower(p1, p2) <= 0;
 }
 
 CChainPower CChainPower::ExpandCompactPower(uint256 compactPower, uint32_t height)

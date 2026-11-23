@@ -231,6 +231,8 @@ class CChainPower
             return *this;
         }
 
+        friend int CompareChainPower(const CChainPower &p1, const CChainPower &p2);
+
         friend bool operator==(const CChainPower &p1, const CChainPower &p2);
 
         friend bool operator!=(const CChainPower &p1, const CChainPower &p2)

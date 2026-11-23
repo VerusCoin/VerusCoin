@@ -545,3 +545,115 @@ TEST_F(ChainPowerExact, MicrobenchmarkFastVsFallback)
     std::printf("CHAINPOWER_BENCH sink=%llu\n", (unsigned long long)sink);
     SUCCEED(); // informational only: no speed threshold assertion
 }
+
+#include "mmr_parallel.h"
+
+TEST_F(ChainPowerExact, TopBitsLegacyOracle)
+{
+    std::mt19937_64 rng(0x004d4d5252415449ULL);
+    for (size_t i = 0; i < 10000; ++i)
+        CheckSixRelations("10k full width", Random256(rng), Random256(rng), Random256(rng), Random256(rng));
+    // Sweep every bit width, including both sides of the 112/240 boundaries.
+    for (unsigned bits = 0; bits <= 256; ++bits)
+        for (unsigned rep = 0; rep < 16; ++rep)
+        {
+            arith_uint256 mask = bits == 256 ? ~arith_uint256(0) : (arith_uint256(1) << bits) - arith_uint256(1);
+            const arith_uint256 a = Random256(rng) & mask;
+            const arith_uint256 b = Random256(rng) & mask;
+            CheckSixRelations("bit sweep", a, b, b, a);
+            CheckSixRelations("equality", a, b, a, b);
+            CheckSixRelations("zero divisor selected as one", a, arith_uint256(0), b, arith_uint256(0));
+            CheckSixRelations("zero numerator", arith_uint256(0), a, b, arith_uint256(0));
+            // Identical top 200 bits, independently random low 56 bits.
+            const arith_uint256 top = (Random256(rng) >> 56) << 56;
+            const arith_uint256 loMask = (arith_uint256(1) << 56) - arith_uint256(1);
+            CheckSixRelations("near ties", top | (Random256(rng) & loMask), a,
+                              top | (Random256(rng) & loMask), b);
+        }
+    for (unsigned bits : {64u, 112u, 113u, 239u, 240u, 241u, 255u})
+    {
+        const arith_uint256 d = arith_uint256(1) << bits;
+        for (int delta = -2; delta <= 2; ++delta)
+        {
+            const arith_uint256 v = delta < 0 ? d - arith_uint256(-delta) : d + arith_uint256(delta);
+            CheckSixRelations("exact powers", v, d, d, v);
+        }
+    }
+}
+
+namespace {
+template <typename A, typename B>
+void CheckMMRLayers(const A &a, const B &b)
+{
+    ASSERT_EQ(a.size(), b.size());
+    ASSERT_EQ(a.upperNodes.size(), b.upperNodes.size());
+    for (size_t level = 0; level <= a.upperNodes.size(); ++level)
+    {
+        const size_t count = level ? a.upperNodes[level - 1].size() : a.size();
+        ASSERT_EQ(count, level ? b.upperNodes[level - 1].size() : b.size());
+        for (size_t i = 0; i < count; ++i)
+        {
+            const ChainMMRNode x = a.GetNode(level, i), y = b.GetNode(level, i);
+            ASSERT_TRUE(x.hash == y.hash) << "level=" << level << " index=" << i;
+            ASSERT_TRUE(x.power == y.power) << "level=" << level << " index=" << i;
+        }
+    }
+}
+}
+
+TEST_F(StartupChainProof, ParallelMMRRandomLeaves)
+{
+    std::mt19937_64 rng(0x004d4d5250415241ULL);
+    std::vector<ChainMMRNode> leaves;
+    for (size_t i = 0; i < 100003; ++i)
+    {
+        // Random 32-bit work/stake keep even the root below 128-bit sums.
+        const arith_uint256 power = (arith_uint256(rng() & 0xffffffffULL) << 128) |
+                                    arith_uint256(rng() & 0xffffffffULL);
+        leaves.emplace_back(ArithToUint256(Random256(rng)), ArithToUint256(power));
+    }
+    for (size_t count : {size_t(0), size_t(1), size_t(2), size_t(3), size_t(65535),
+                         size_t(65536), size_t(65537), size_t(100000), size_t(100003)})
+        for (size_t workers : {size_t(1), size_t(2), size_t(16)})
+        {
+            CMerkleMountainRange<ChainMMRNode> serial, parallel;
+            std::vector<ChainMMRNode> part(leaves.begin(), leaves.begin() + count);
+            for (const auto &leaf : part) serial.Add(leaf);
+            AppendMMRParallel(parallel, part, workers);
+            CheckMMRLayers(serial, parallel);
+            // Retain an odd prefix and append across every level boundary.
+            std::vector<ChainMMRNode> suffix(leaves.begin() + count, leaves.end());
+            for (const auto &leaf : suffix) serial.Add(leaf);
+            AppendMMRParallel(parallel, suffix, workers);
+            CheckMMRLayers(serial, parallel);
+        }
+}
+
+TEST_F(StartupChainProof, ParallelMMRSetTipOverlay)
+{
+    std::vector<uint256> hashes;
+    std::vector<CBlockIndex> blocks(131075);
+    MakeStartupChain(blocks, hashes, 0, 0x207fffff, 0x207fffff, 0x207fffff);
+    CMerkleMountainRange<ChainMMRNode> serial;
+    for (const auto &block : blocks) serial.Add(block.GetBlockMMRNode());
+    CChain chain;
+    chain.SetTip(&blocks.back()); // two workers, odd final layer sizes
+    CheckMMRLayers(serial, chain.GetMMR());
+    chain.SetTip(NULL);
+    EXPECT_EQ(chain.GetMMR().size(), 0u);
+    // Unmodified serial threshold, then parallel append to a retained odd prefix.
+    chain.SetTip(&blocks[65534]);
+    chain.SetTip(&blocks.back());
+    CheckMMRLayers(serial, chain.GetMMR());
+    chain.SetTip(&blocks.back()); // no-op
+    CheckMMRLayers(serial, chain.GetMMR());
+    // Deep reorg with a non-chunk-aligned retained prefix. Replace hashes
+    // only after rewinding so the prefix's cached parents remain valid.
+    chain.SetTip(&blocks[12]);
+    for (size_t i = 13; i < hashes.size(); ++i)
+        hashes[i] = ArithToUint256(UintToArith256(hashes[i]) + arith_uint256(1000000));
+    CMerkleMountainRange<ChainMMRNode> reorg;
+    for (const auto &block : blocks) reorg.Add(block.GetBlockMMRNode());
+    chain.SetTip(&blocks.back());
+    CheckMMRLayers(reorg, chain.GetMMR());
+}

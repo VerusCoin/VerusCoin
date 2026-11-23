@@ -4,6 +4,8 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "txdb.h"
+#include "startup_guts.h"
+#include <chrono>
 
 #include "chainparams.h"
 #include "hash.h"
@@ -2551,7 +2553,182 @@ bool CBlockTreeDB::blockOnchainActive(const uint256 &hash) {
     return true;
 }
 
+// Startup-only: caller holds chain initialization quiescent. Compression,
+// hash dispatch, activation heights and chain ID MUST NOT be reconfigured until
+// return. Thread creation publishes these frozen settings and initialized
+// Haraka constants. Non-ISA/ARM CLHASH detection writes globals on each call,
+// so those builds deliberately retain the serial path (see switch below).
+bool CBlockTreeDB::LoadBlockIndexGutsParallel(std::function<CBlockIndex*(const uint256&)> insertBlockIndex)
+{
+    const uint64_t budget=StartupGutsBufferBudget();
+    return LoadBlockIndexGutsParallel(insertBlockIndex,budget);
+}
+
+bool CBlockTreeDB::LoadBlockIndexGutsParallel(std::function<CBlockIndex*(const uint256&)> insertBlockIndex, uint64_t maxBufferBytes)
+{
+    CVerusHash::init();
+    CVerusHashV2::init();
+    IsCPUVerusOptimized();
+    const bool compression = CCompactSolutionVector::IsCompressionOn();
+    const auto activation = CConstVerusSolutionVector::activationHeight;
+    const auto hashFunction = CBlockHeader::hashFunction;
+    const auto chainID = ASSETCHAINS_CHAINID;
+    const size_t workers = std::min<size_t>(16,std::max(1u,std::thread::hardware_concurrency()));
+    // Each uint256 serializes its 32 raw bytes, not its printed big-endian hex.
+    // 'b' + 32 bytes is fixed length. Split the FIRST SERIALIZED hash byte;
+    // [floor(i*256/N),floor((i+1)*256/N)) covers all 256 prefixes exactly.
+    // LevelDB's comparator compares unsigned bytes; no numeric uint256 compare.
+    std::vector<std::string> bounds;
+    for(size_t i=0;i<workers;++i) {
+        std::string bound(33,'\0');bound[0]=DB_BLOCK_INDEX;
+        bound[1]=static_cast<char>(i*256/workers);bounds.push_back(bound);
+    }
+    // The ledger includes every owned staged record until its destruction after
+    // ordered commit (or cancellation). No per-shard cumulative-volume quota.
+    std::atomic<uint64_t> liveBytes(0),liveHiwater(0);
+    struct Record {
+        CDiskBlockIndex disk; uint256 hash;
+        std::atomic<uint64_t>* live=nullptr;
+        uint64_t accounted=0;
+        ~Record() { if(live) live->fetch_sub(accounted,std::memory_order_relaxed); }
+    };
+    struct SnapshotGuard {
+        CBlockTreeDB &db; const leveldb::Snapshot *snapshot;
+        explicit SnapshotGuard(CBlockTreeDB &d):db(d),snapshot(d.GetSnapshot()){}
+        ~SnapshotGuard(){db.ReleaseSnapshot(snapshot);}
+    } snapshot(*this); // common sequence, released only after all iterators join
+    using Clock=std::chrono::steady_clock;
+    auto start=Clock::now();
+    int64_t decodeMs=-1;
+    size_t keys=0;
+    try {
+        StartupGutsMerge<Record>(workers,
+            [&](size_t i,const std::function<void(std::string,std::unique_ptr<Record>)>&emit) {
+                // LevelDB documents concurrent NewIterator on one DB as safe;
+                // never share an Iterator. Create/use/destroy on THIS worker.
+                std::unique_ptr<CDBIterator> cursor(NewIterator(snapshot.snapshot));
+                cursor->SeekRaw(bounds[i]);
+                // All producers finish and join before the first callback.
+                // A reservation failure therefore always permits a serial retry.
+                while(cursor->Valid()) {
+                    auto key=cursor->GetRawKey();
+                    if(key.empty()||key[0]!=DB_BLOCK_INDEX) break;
+                    if(i+1<workers && leveldb::Slice(key).compare(bounds[i+1])>=0) break;
+                    if(key.size()!=33) throw std::runtime_error("malformed block-index key");
+                    std::unique_ptr<Record> record(new Record);
+                    if(!cursor->GetValue(record->disk)) throw std::runtime_error("failed to read block-index value");
+                    record->hash=record->disk.GetBlockHash();
+                    record->accounted=sizeof(Record)+128+key.capacity()+
+                        record->disk.nSolution.vch.capacity()+record->disk.nSolution._size;
+                    auto live=liveBytes.load(std::memory_order_relaxed);
+                    do {
+                        if(live>maxBufferBytes || record->accounted>maxBufferBytes-live)
+                            throw StartupGutsBufferLimit(); // BEFORE any map publication
+                    } while(!liveBytes.compare_exchange_weak(live,live+record->accounted,std::memory_order_relaxed));
+                    live+=record->accounted;
+                    record->live=&liveBytes; // destructor releases a successful reservation
+                    auto high=liveHiwater.load(std::memory_order_relaxed);
+                    while(high<live && !liveHiwater.compare_exchange_weak(high,live,std::memory_order_relaxed)) {}
+                    emit(std::move(key),std::move(record));
+                    cursor->Next();
+                }
+                cursor->CheckStatus(); // invalid must not silently swallow I/O/CRC error
+            }, [&](const std::string&,std::unique_ptr<Record> record) {
+                if(decodeMs<0) decodeMs=std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now()-start).count();
+                auto &diskindex=record->disk;
+                // Construct block index object
+#ifdef VERUSHASHDEBUG
+                if (diskindex.nVersion == CBlockHeader::VERUS_V2)
+                {
+                    printf("VerusHash 2.0 block header: %s\n", diskindex.ToString().c_str());
+                }
+#endif
+                CBlockIndex* pindexNew    = insertBlockIndex(record->hash);
+                pindexNew->pprev          = insertBlockIndex(diskindex.hashPrev);
+                pindexNew->SetHeight(diskindex.GetHeight());
+                pindexNew->nFile          = diskindex.nFile;
+                pindexNew->nDataPos       = diskindex.nDataPos;
+                pindexNew->nUndoPos       = diskindex.nUndoPos;
+                pindexNew->hashSproutAnchor     = diskindex.hashSproutAnchor;
+                pindexNew->nVersion       = diskindex.nVersion;
+                pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
+                pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
+                pindexNew->nTime          = diskindex.nTime;
+                pindexNew->nBits          = diskindex.nBits;
+                pindexNew->nNonce         = diskindex.nNonce;
+                pindexNew->nSolution      = diskindex.nSolution;
+                pindexNew->nStatus        = diskindex.nStatus;
+                pindexNew->nCachedBranchId = diskindex.nCachedBranchId;
+                pindexNew->nTx            = diskindex.nTx;
+                pindexNew->nSproutValue   = diskindex.nSproutValue;
+                pindexNew->nSaplingValue  = diskindex.nSaplingValue;
+
+                // Consistency checks
+                auto header = pindexNew->GetBlockHeader();
+                // GetDiskBlockHeader is EXACTLY the input hashed by the worker.
+                // Keep the legacy recomputation on ANY reconstruction mismatch.
+                // Thus identity remains computed from bytes, never the disk key;
+                // even old behavior for a corrupt key/value pair is unchanged.
+                auto original = diskindex.GetDiskBlockHeader();
+                const bool identical = header.nVersion == original.nVersion &&
+                    header.hashPrevBlock == original.hashPrevBlock &&
+                    header.hashMerkleRoot == original.hashMerkleRoot &&
+                    header.hashFinalSaplingRoot == original.hashFinalSaplingRoot &&
+                    header.nTime == original.nTime && header.nBits == original.nBits &&
+                    header.nNonce == original.nNonce && header.nSolution == original.nSolution;
+                uint256 hash = identical ? record->hash : header.GetHash();
+#ifdef VERUS_GUTS_VERIFY
+                if (hash != header.GetHash())
+                    throw std::runtime_error("startup guts hash reuse verification failed");
+#endif
+                if (diskindex.hashPrev.IsNull() && hash != Params().consensus.hashGenesisBlock)
+                {
+                    throw std::runtime_error(strprintf("LoadBlockIndex(): prior block hash NULL on non-genesis block: %s\n", diskindex.ToString()));
+                }
+
+                if (hash != pindexNew->GetBlockHash())
+                {
+                    printf("Error -- hashes don't match.\nheader.GetHash: %s\nGetBlockHash(): %s\non disk: %s\nin memory: %s\n",
+                           hash.GetHex().c_str(), pindexNew->GetBlockHash().GetHex().c_str(), diskindex.ToString().c_str(),  pindexNew->ToString().c_str());
+                    throw std::runtime_error(strprintf("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
+                                 diskindex.ToString(),  pindexNew->ToString()));
+                }
+
+                ++keys;
+
+            });
+    } catch(const StartupGutsBufferLimit&) {
+        assert(liveBytes.load()==0); // cancelled workers joined, staged payloads freed
+        LogPrintf("LoadBlockIndexGuts: buffer budget exceeded; retrying serial\n");
+        return LoadBlockIndexGutsSerial(insertBlockIndex);
+    } catch(const boost::thread_interrupted&) { throw; }
+      catch(const std::exception &e) { return error("LoadBlockIndexGuts: %s",e.what()); }
+    // These checks document/enforce the caller's startup-only frozen-state
+    // contract; concurrent configuration writes are NOT supported by the node.
+    assert(compression==CCompactSolutionVector::IsCompressionOn());
+    assert(hashFunction==CBlockHeader::hashFunction && chainID==ASSETCHAINS_CHAINID);
+    assert(activation.active==CConstVerusSolutionVector::activationHeight.active);
+    for(int i=0;i<CActivationHeight::NUM_VERSIONS;++i)
+        assert(activation.heights[i]==CConstVerusSolutionVector::activationHeight.heights[i]);
+    const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now()-start).count();
+    if(decodeMs<0) decodeMs=elapsed; // empty database
+    const auto commitMs=elapsed-decodeMs;
+    assert(liveBytes.load()==0);
+    if(GetBoolArg("-printtoconsole",false))
+        LogPrintf("LoadBlockIndexGuts: workers=%d keys=%d decode_parallel_ms=%d commit_ms=%d livebuf_hiwater=%d buffer_budget=%d livebuf_final=%d backpressure_waits=0 elapsed_ms=%d\n",
+                  workers,keys,decodeMs,commitMs,liveHiwater.load(),maxBufferBytes,liveBytes.load(),elapsed);
+    return true;
+}
+
 bool CBlockTreeDB::LoadBlockIndexGuts(std::function<CBlockIndex*(const uint256&)> insertBlockIndex)
+{
+#if defined(ENABLE_VERUS_ISA) && (defined(__x86_64__) || defined(__i386__))
+    if(GetBoolArg("-startupguts",true)) return LoadBlockIndexGutsParallel(insertBlockIndex);
+#endif
+    return LoadBlockIndexGutsSerial(insertBlockIndex);
+}
+
+bool CBlockTreeDB::LoadBlockIndexGutsSerial(std::function<CBlockIndex*(const uint256&)> insertBlockIndex)
 {
     boost::scoped_ptr<CDBIterator> pcursor(NewIterator());
 

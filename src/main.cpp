@@ -3,6 +3,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
+#include <unistd.h>
+#include <sys/stat.h>
+#include <cstring>
+#include <cerrno>
 #include "main.h"
 #include "addressindex.h"
 #include "spentindex.h"
@@ -40,12 +44,22 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "komodo.h"
+#include "startup_parallel.h"
+#include <stdexcept>
+#include <chrono>
 
 #include <cstring>
 #include <algorithm>
 #include <atomic>
-#include <sstream>
+#include <condition_variable>
+#include <deque>
 #include <map>
+#include <set>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <thread>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
@@ -53,8 +67,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/math/distributions/poisson.hpp>
-#include <boost/thread.hpp>
 #include <boost/static_assert.hpp>
+#include <boost/thread.hpp>
 
 using namespace std;
 
@@ -156,12 +170,64 @@ const string verusDataSignaturePrefix = "Verus signed data:\n";
 // Internal stuff
 namespace {
 
+#define BLOCK_IMPORT_WORKERS 4
+#define BLOCK_IMPORT_QUEUE_LIMIT 32
+
+    template<typename T>
+    class BlockingQueue
+    {
+    public:
+        explicit BlockingQueue(size_t maxSize) : m_maxSize(maxSize), m_closed(false) {}
+
+        bool push(T&& item)
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_not_full.wait(lock, [&]() { return m_closed || m_queue.size() < m_maxSize; });
+            if (m_closed)
+                return false;
+            m_queue.push_back(std::move(item));
+            m_not_empty.notify_one();
+            return true;
+        }
+
+        bool pop(T& item)
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_not_empty.wait(lock, [&]() { return m_closed || !m_queue.empty(); });
+            if (m_queue.empty())
+                return false;
+            item = std::move(m_queue.front());
+            m_queue.pop_front();
+            m_not_full.notify_one();
+            return true;
+        }
+
+        void close()
+        {
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_closed = true;
+            }
+            m_not_empty.notify_all();
+            m_not_full.notify_all();
+        }
+
+    private:
+        size_t m_maxSize;
+        std::deque<T> m_queue;
+        std::mutex m_mutex;
+        std::condition_variable m_not_empty;
+        std::condition_variable m_not_full;
+        bool m_closed;
+    };
+
     struct CBlockIndexWorkComparator
     {
         bool operator()(CBlockIndex *pa, CBlockIndex *pb) const {
             // First sort by most total work, ...
-            if (pa->chainPower > pb->chainPower) return false;
-            if (pa->chainPower < pb->chainPower) return true;
+            const int powerRelation = CompareChainPower(pa->chainPower, pb->chainPower);
+            if (powerRelation > 0) return false;
+            if (powerRelation < 0) return true;
 
             // ... then by earliest time received, ...
             if (pa->nSequenceId < pb->nSequenceId) return false;
@@ -6732,7 +6798,12 @@ bool ContextualCheckBlock(
     const Consensus::Params& consensusParams = chainparams.GetConsensus();
     bool sapling = consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_SAPLING);
 
-    if (block.nVersion != CBlockHeader::GetVersionByHeight(nHeight))
+        // TEST-CONTEXT PATCH: during -reindex the chain genesis exists only in the
+        // import file (InitBlockIndex runs after the import loop) and the on-disk
+        // genesis has nVersion=1 while the strict rule demands 4 at height 0.
+        // Exempt height 0 so the file-derived genesis can enter the index; every
+        // other height keeps the rule. (Validated on ctx_fork/ctx_forkbase.)
+    if (nHeight > 0 && block.nVersion != CBlockHeader::GetVersionByHeight(nHeight))
     {
         printf("ERROR: block rejected as wrong version, version should be %d for block height %d\n", CBlockHeader::GetVersionByHeight(nHeight), nHeight);
         return state.DoS(10, error("%s: block header has incorrect version", __func__), REJECT_INVALID, "incorrect-block-version");
@@ -7422,6 +7493,32 @@ CBlockIndex * InsertBlockIndex(uint256 hash)
 
 //void komodo_pindex_init(CBlockIndex *pindex,int32_t height);
 
+// Startup block-proof precompute: per-block GetBlockProof only (no chainPower
+// writes, no cumulative state). Parallel via verus_startup::ParallelForRanges;
+// all workers joined before return/exception. Ranges validated overflow-safely.
+std::vector<CChainPower> ComputeStartupBlockProofs(const std::vector<std::pair<int,CBlockIndex*> >& sorted, size_t begin, size_t count, size_t requestedThreads)
+{
+    if (begin > sorted.size() || count > sorted.size() - begin) {
+        throw std::out_of_range("ComputeStartupBlockProofs: begin/count exceed sorted vector bounds");
+    }
+    std::vector<CChainPower> proofs;
+    proofs.resize(count); // pre-sized; workers write only their own disjoint slots
+    if (count == 0) {
+        return proofs;
+    }
+    verus_startup::ParallelForRanges(count, requestedThreads,
+        [&sorted, &proofs, begin](size_t b, size_t e) {
+            for (size_t i = b; i < e; ++i) {
+                CBlockIndex* pindex = sorted[begin + i].second;
+                if (pindex == NULL) {
+                    throw std::invalid_argument("ComputeStartupBlockProofs: null CBlockIndex pointer in sorted vector");
+                }
+                proofs[i] = GetBlockProof(*pindex); // reads header fields/immutable params only
+            }
+        });
+    return proofs;
+}
+
 bool static LoadBlockIndexDB()
 {
     const CChainParams& chainparams = Params();
@@ -7443,10 +7540,74 @@ bool static LoadBlockIndexDB()
     //fprintf(stderr,"load blockindexDB paired %u\n",(uint32_t)time(NULL));
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
     //fprintf(stderr,"load blockindexDB sorted %u\n",(uint32_t)time(NULL));
-    BOOST_FOREACH(const PAIRTYPE(int, CBlockIndex*)& item, vSortedByHeight)
+
+    // Startup proof precompute options (-startupthreads, default 0 = original serial path)
+    int startupThreads = 0;
+    try {
+        int64_t nThreadsArg = GetArg("-startupthreads", 0);
+        if (nThreadsArg < 0 || nThreadsArg > 32) {
+            throw std::runtime_error("-startupthreads must be an integer between 0 and 32");
+        }
+        startupThreads = (int)nThreadsArg;
+    } catch (const std::exception& e) {
+        LogPrintf("LoadBlockIndexDB: invalid startup options: %s\n", e.what());
+        return false;
+    }
+    const bool fStartupVerifyProofs = GetBoolArg("-startupverifyproofs", false);
+    const size_t nStartupChunk = 65536;
+    std::vector<CChainPower> startupProofs;
+    size_t maxStartupProofCapacity = 0;
+    int64_t startupPrecomputeMs = 0;
+    int64_t startupVerifiedCount = 0;
+    std::chrono::steady_clock::time_point startupPassStart = std::chrono::steady_clock::now();
+
+    for (size_t i = 0; i < vSortedByHeight.size(); ++i)
     {
+        const PAIRTYPE(int, CBlockIndex*)& item = vSortedByHeight[i];
         CBlockIndex* pindex = item.second;
-        pindex->chainPower = (pindex->pprev ? CChainPower(pindex) + pindex->pprev->chainPower : CChainPower(pindex)) + GetBlockProof(*pindex);
+        if (startupThreads > 0 && (i % nStartupChunk) == 0) {
+            // Chunk boundary: compute (and optionally verify) this chunk fully,
+            // then apply its blocks in order below. Workers are joined inside
+            // ComputeStartupBlockProofs before any chainPower state is touched.
+            if (ShutdownRequested()) {
+                LogPrintf("LoadBlockIndexDB: shutdown requested during startup proof precompute\n");
+                return false;
+            }
+            size_t chunkBegin = i;
+            size_t chunkCount = std::min(nStartupChunk, vSortedByHeight.size() - chunkBegin);
+            try {
+                // Workers from the previous chunk are fully joined and its proofs
+                // already applied above, so free the previous allocation before
+                // assigning the next result (clear() alone would not release capacity,
+                // and swapping after the assignment would transiently hold two buffers).
+                std::vector<CChainPower>().swap(startupProofs);
+                std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+                startupProofs = ComputeStartupBlockProofs(vSortedByHeight, chunkBegin, chunkCount, (size_t)startupThreads);
+                maxStartupProofCapacity = std::max(maxStartupProofCapacity, startupProofs.capacity());
+                startupPrecomputeMs += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+                if (fStartupVerifyProofs) {
+                    for (size_t j = 0; j < chunkCount; ++j) {
+                        CBlockIndex* pv = vSortedByHeight[chunkBegin + j].second;
+                        CChainPower direct = GetBlockProof(*pv);
+                        const CChainPower& pre = startupProofs[j];
+                        if (pre.chainWork != direct.chainWork || pre.chainStake != direct.chainStake || pre.nHeight != direct.nHeight) {
+                            throw std::runtime_error(strprintf("startup proof verification mismatch at height=%d hash=%s (chainWork/chainStake/nHeight differ)", pv->GetHeight(), pv->GetBlockHash().ToString()));
+                        }
+                    }
+                    startupVerifiedCount += (int64_t)chunkCount;
+                }
+            } catch (const std::exception& e) {
+                LogPrintf("LoadBlockIndexDB: startup proof precompute failed (chunk starting at sorted index %d): %s\n", (int)chunkBegin, e.what());
+                return false;
+            }
+        }
+        CChainPower startupBlockProof;
+        if (startupThreads > 0) {
+            startupBlockProof = startupProofs[i - (i / nStartupChunk) * nStartupChunk];
+        } else {
+            startupBlockProof = GetBlockProof(*pindex); // original serial recurrence
+        }
+        pindex->chainPower = (pindex->pprev ? CChainPower(pindex) + pindex->pprev->chainPower : CChainPower(pindex)) + startupBlockProof;
         // We can link the chain of blocks for which we've received transactions at some point.
         // Pruned nodes may have deleted the block.
         if (pindex->nTx > 0) {
@@ -7509,6 +7670,17 @@ bool static LoadBlockIndexDB()
             pindexBestHeader = pindex;
         //komodo_pindex_init(pindex,(int32_t)pindex->GetHeight());
     }
+    int64_t startupOrderedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startupPassStart).count();
+    int configuredWorkerLimit = (startupThreads == 0) ? 0 : ((startupThreads <= 1) ? 1 : std::min(startupThreads, 32));
+    // max_proof_buffer_capacity_bytes reports the actual maximum payload capacity of the
+    // startupProofs buffer (sizeof(CChainPower) * peak capacity); it excludes worker thread
+    // stacks and allocator overhead and is NOT a total-RSS measurement. Serial mode (mode 0)
+    // never allocates this buffer, so its capacity is 0.
+    LogPrintf("LoadBlockIndexDB: startup proof summary: mode=%s requestedThreads=%d configuredWorkerLimit=%d records=%d chunkSize=%d precompute_ms=%d ordered_pass_inclusive_ms=%d verified=%d max_proof_buffer_capacity_bytes=%u\n",
+              (startupThreads == 0 ? "legacy-serial" : (startupThreads == 1 ? "caller-precompute" : "parallel-precompute")),
+              startupThreads, configuredWorkerLimit, (int)vSortedByHeight.size(), (int)nStartupChunk,
+              (int)startupPrecomputeMs, (int)startupOrderedMs, (int)startupVerifiedCount,
+              (unsigned)(sizeof(CChainPower) * maxStartupProofCapacity));
     //fprintf(stderr,"load blockindexDB chained %u\n",(uint32_t)time(NULL));
 
     // Load block file info
@@ -8055,105 +8227,269 @@ bool InitBlockIndex(const CChainParams& chainparams)
 
 bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, CDiskBlockPos *dbp)
 {
-    // Map of disk positions for blocks with unknown parent (only used for reindex)
-    static std::multimap<uint256, CDiskBlockPos> mapBlocksUnknownParent;
+    struct BlockTask
+    {
+        uint64_t seq;
+        CDiskBlockPos diskPos;
+        unsigned int size;
+        std::vector<char> rawData;
+    };
+
+    struct BlockResult
+    {
+        uint64_t seq;
+        CDiskBlockPos diskPos;
+        std::shared_ptr<CBlock> block;
+        std::string errorMsg;
+    };
+
+    BlockingQueue<BlockTask> taskQueue(BLOCK_IMPORT_QUEUE_LIMIT);
+    BlockingQueue<BlockResult> resultQueue(BLOCK_IMPORT_QUEUE_LIMIT);
+
+    std::atomic<uint64_t> nextSequence{0};
+    std::atomic<bool> readerDone{false};
+    std::atomic<bool> errorFlag{false};
+    std::atomic<int> activeWorkers{BLOCK_IMPORT_WORKERS};
+
     int64_t nStart = GetTimeMillis();
-
     int nLoaded = 0;
-    try {
-        // This takes over fileIn and calls fclose() on it in the CBufferedFile destructor
-        //CBufferedFile blkdat(fileIn, 2*MAX_BLOCK_SIZE, MAX_BLOCK_SIZE+8, SER_DISK, CLIENT_VERSION);
-        CBufferedFile blkdat(fileIn, 32*MAX_BLOCK_SIZE, MAX_BLOCK_SIZE+8, SER_DISK, CLIENT_VERSION);
-        uint64_t nRewind = blkdat.GetPos();
-        while (!blkdat.eof()) {
-            boost::this_thread::interruption_point();
 
-            blkdat.SetPos(nRewind);
-            nRewind++; // start one byte further next time, in case of failure
-            blkdat.SetLimit(); // remove former limit
-            unsigned int nSize = 0;
-            try {
-                // locate a header
-                unsigned char buf[MESSAGE_START_SIZE];
-                blkdat.FindByte(chainparams.MessageStart()[0]);
-                nRewind = blkdat.GetPos()+1;
-                blkdat >> FLATDATA(buf);
-                if (memcmp(buf, chainparams.MessageStart(), MESSAGE_START_SIZE))
-                    continue;
-                // read size
-                blkdat >> nSize;
-                if (nSize < 80 || nSize > MAX_BLOCK_SIZE)
-                    continue;
-            } catch (const std::exception&) {
-                // no valid block header found; don't complain
-                break;
+    std::vector<std::thread> workers;
+    workers.reserve(BLOCK_IMPORT_WORKERS);
+
+    for (int i = 0; i < BLOCK_IMPORT_WORKERS; ++i) {
+        workers.emplace_back([&]() {
+            BlockTask task;
+            while (!errorFlag.load() && taskQueue.pop(task)) {
+                BlockResult result;
+                result.seq = task.seq;
+                result.diskPos = task.diskPos;
+                result.block = std::make_shared<CBlock>();
+                try {
+                    const char* begin = task.rawData.empty() ? nullptr : task.rawData.data();
+                    const char* end = begin ? begin + task.rawData.size() : nullptr;
+                    CDataStream ds(SER_DISK, CLIENT_VERSION);
+                    if (begin && end)
+                    {
+                        ds.write(begin, end - begin);
+                        ds.Rewind(end - begin);
+                    }
+                    ds >> *result.block;
+                } catch (const std::exception& e) {
+                    result.errorMsg = e.what();
+                }
+                if (!resultQueue.push(std::move(result))) {
+                    break;
+                }
             }
-            try {
-                // read block
-                uint64_t nBlockPos = blkdat.GetPos();
-                if (dbp)
-                    dbp->nPos = nBlockPos;
-                blkdat.SetLimit(nBlockPos + nSize);
-                blkdat.SetPos(nBlockPos);
-                CBlock block;
-                blkdat >> block;
-                nRewind = blkdat.GetPos();
+            // TEST-CONTEXT PATCH: the last worker to exit closes the result queue so the
+            // commit loop resultQueue.pop() can return false once drained. Without this
+            // the commit thread blocks forever whenever the reader finishes (upstream
+            // closes resultQueue only AFTER the commit loop - unreachable).
+            if (activeWorkers.fetch_sub(1) == 1) {
+                resultQueue.close();
+            }
+        });
+    }
 
-                // detect out of order blocks, and store them for later
-                uint256 hash = block.GetHash();
-                if (hash != chainparams.GetConsensus().hashGenesisBlock && mapBlockIndex.find(block.hashPrevBlock) == mapBlockIndex.end()) {
-                    LogPrint("reindex", "%s: Out of order block %s, parent %s not known\n", __func__, hash.ToString(),
-                             block.hashPrevBlock.ToString());
-                    if (dbp)
-                        mapBlocksUnknownParent.insert(std::make_pair(block.hashPrevBlock, *dbp));
-                    continue;
-                }
+    // Reader thread
+    // TEST-CONTEXT PATCH: replaced the CBufferedFile scanner with direct pread +
+    // magic scan. Upstream CBufferedFile::SetPos silently clamps nReadPos whenever
+    // the target lies outside the rewind window (nReadPos = nSrcPos - nRewind), so
+    // on raw bootstrap files the framing seek after the first record skips most of
+    // the file; the bounded record read additionally trips Fill() "past buffer
+    // limit". Both make stock v1.2.18 unable to -reindex from blk*.dat files.
+    // pread is position-exact and immune to both. Queue-close discipline: this
+    // thread closes taskQueue on exit; the last worker closes resultQueue.
+    std::thread reader([&]() {
+        try {
+            const int fd = fileno(fileIn);
+            struct stat sbuf;
+            if (fstat(fd, &sbuf) != 0)
+                throw std::runtime_error("fstat failed on block file");
+            const off_t fileSize = sbuf.st_size;
+            const size_t SCAN_CHUNK = 4 << 20;
+            const char magic0 = chainparams.MessageStart()[0];
+            std::vector<char> window(SCAN_CHUNK);
+            off_t scanFrom = 0;   // absolute file offset to scan from
+            size_t carry = 0;     // overlap bytes carried at window start
 
-                // process in case the block isn't known yet
-                if (mapBlockIndex.count(hash) == 0 || (mapBlockIndex[hash]->nStatus & BLOCK_HAVE_DATA) == 0) {
-                    CValidationState state;
-                    if (ProcessNewBlock(0, 0, state, chainparams, NULL, &block, true, dbp))
-                        nLoaded++;
-                    if (state.IsError())
+            while (scanFrom < fileSize && !errorFlag.load()) {
+                boost::this_thread::interruption_point();
+
+                off_t windowStart = scanFrom - (off_t)carry;
+                size_t want = SCAN_CHUNK;
+                if (windowStart + (off_t)want > fileSize)
+                    want = (size_t)(fileSize - windowStart);
+                size_t got = 0;
+                while (got < want) {
+                    ssize_t r = pread(fd, window.data() + got, want - got, windowStart + got);
+                    if (r < 0 && errno == EINTR)
+                        continue;
+                    if (r <= 0)
                         break;
-                } else if (hash != chainparams.GetConsensus().hashGenesisBlock && mapBlockIndex[hash]->GetHeight() % 1000 == 0) {
-                    LogPrintf("Block Import: already had block %s at height %d\n", hash.ToString(), mapBlockIndex[hash]->GetHeight());
+                    got += (size_t)r;
                 }
+                if (got < MESSAGE_START_SIZE + 4)
+                    break; // nothing usable left
 
-                // Recursively process earlier encountered successors of this block
-                deque<uint256> queue;
-                queue.push_back(hash);
-                while (!queue.empty()) {
-                    uint256 head = queue.front();
-                    queue.pop_front();
-                    std::pair<std::multimap<uint256, CDiskBlockPos>::iterator, std::multimap<uint256, CDiskBlockPos>::iterator> range = mapBlocksUnknownParent.equal_range(head);
-                    while (range.first != range.second) {
-                        std::multimap<uint256, CDiskBlockPos>::iterator it = range.first;
-                        if (ReadBlockFromDisk(mapBlockIndex.count(hash)!=0 ? mapBlockIndex[hash]->GetHeight() : 0, block, it->second, chainparams.GetConsensus(), 1))
-                        {
-                            LogPrintf("%s: Processing out of order child %s of %s\n", __func__, block.GetHash().ToString(),
-                                      head.ToString());
-                            CValidationState dummy;
-                            if (ProcessNewBlock(0, 0, dummy, chainparams, NULL, &block, true, &it->second))
-                            {
-                                nLoaded++;
-                                queue.push_back(block.GetHash());
-                            }
-                        }
-                        range.first++;
-                        mapBlocksUnknownParent.erase(it);
+                // scan for the network magic within [scanFrom, windowStart+got)
+                const char* base = window.data();
+                const char* from = base + carry;
+                size_t avail = got - carry;
+                const char* hit = NULL;
+                for (size_t i = 0; i + MESSAGE_START_SIZE <= avail; ++i) {
+                    if (from[i] == magic0 && memcmp(from + i, chainparams.MessageStart(), MESSAGE_START_SIZE) == 0) {
+                        hit = from + i;
+                        break;
                     }
                 }
-            } catch (const std::exception& e) {
-                LogPrintf("%s: Deserialize or I/O error - %s\n", __func__, e.what());
+                if (!hit) {
+                    scanFrom = windowStart + got - (MESSAGE_START_SIZE - 1);
+                    carry = MESSAGE_START_SIZE - 1;
+                    continue;
+                }
+                off_t magicPos = windowStart + (off_t)(hit - base);
+
+                // need magic + 4-byte size inside the window
+                if (magicPos + MESSAGE_START_SIZE + 4 > windowStart + got) {
+                    scanFrom = magicPos;
+                    carry = 0;
+                    continue;
+                }
+                uint32_t nSize = 0;
+                memcpy(&nSize, hit + MESSAGE_START_SIZE, 4);
+                if (nSize < 80 || nSize > MAX_BLOCK_SIZE) {
+                    scanFrom = magicPos + 1;
+                    carry = 0;
+                    continue;
+                }
+
+                off_t recStart = magicPos + MESSAGE_START_SIZE + 4;
+                if (recStart + (off_t)nSize > fileSize)
+                    break; // truncated tail
+                BlockTask task;
+                task.seq = nextSequence.fetch_add(1);
+                task.diskPos = dbp ? *dbp : CDiskBlockPos();
+                task.diskPos.nPos = (unsigned int)recStart;
+                task.size = nSize;
+                task.rawData.resize(nSize);
+                size_t gotRec = 0;
+                while (gotRec < nSize) {
+                    ssize_t r = pread(fd, &task.rawData[gotRec], nSize - gotRec, recStart + gotRec);
+                    if (r < 0 && errno == EINTR)
+                        continue;
+                    if (r <= 0)
+                        throw std::runtime_error("short read from block file");
+                    gotRec += (size_t)r;
+                }
+                scanFrom = recStart + (off_t)nSize;
+                carry = 0;
+                if (!taskQueue.push(std::move(task))) {
+                    break;
+                }
+            }
+        } catch (const std::runtime_error& e) {
+            AbortNode(std::string("System error: ") + e.what());
+            errorFlag.store(true);
+        }
+        readerDone.store(true);
+        taskQueue.close();
+    });
+
+    uint64_t nextCommit = 0;
+    std::map<uint64_t, BlockResult> pending;
+    bool aborted = false;
+
+    auto processResult = [&](BlockResult& result) {
+        if (!result.errorMsg.empty()) {
+            LogPrintf("%s: Deserialize error at seq %u - %s\n", __func__, (unsigned)result.seq, result.errorMsg);
+            errorFlag.store(true);
+            aborted = true;
+            return;
+        }
+
+        CBlock& block = *result.block;
+        uint256 hash = block.GetHash();
+
+        static std::multimap<uint256, CDiskBlockPos> mapBlocksUnknownParent;
+
+        if (hash != chainparams.GetConsensus().hashGenesisBlock && mapBlockIndex.find(block.hashPrevBlock) == mapBlockIndex.end()) {
+            LogPrint("reindex", "%s: Out of order block %s, parent %s not known\n", __func__, hash.ToString(),
+                     block.hashPrevBlock.ToString());
+            mapBlocksUnknownParent.insert(std::make_pair(block.hashPrevBlock, result.diskPos));
+            return;
+        }
+
+        if (mapBlockIndex.count(hash) == 0 || (mapBlockIndex[hash]->nStatus & BLOCK_HAVE_DATA) == 0) {
+            CValidationState state;
+            CDiskBlockPos usePos = result.diskPos;
+            if (ProcessNewBlock(0, 0, state, chainparams, NULL, &block, true, &usePos))
+                ++nLoaded;
+            if (state.IsError()) {
+                aborted = true;
+                errorFlag.store(true);
+                return;
+            }
+        } else if (hash != chainparams.GetConsensus().hashGenesisBlock && mapBlockIndex[hash]->GetHeight() % 1000 == 0) {
+            LogPrintf("Block Import: already had block %s at height %d\n", hash.ToString(), mapBlockIndex[hash]->GetHeight());
+        }
+
+        deque<uint256> queue;
+        queue.push_back(hash);
+        while (!queue.empty()) {
+            uint256 head = queue.front();
+            queue.pop_front();
+            auto range = mapBlocksUnknownParent.equal_range(head);
+            while (range.first != range.second) {
+                auto it = range.first;
+                CBlock childBlock;
+                if (ReadBlockFromDisk(mapBlockIndex.count(hash) != 0 ? mapBlockIndex[hash]->GetHeight() : 0, childBlock, it->second, chainparams.GetConsensus(), 1))
+                {
+                    LogPrintf("%s: Processing out of order child %s of %s\n", __func__, childBlock.GetHash().ToString(), head.ToString());
+                    CValidationState dummy;
+                    if (ProcessNewBlock(0, 0, dummy, chainparams, NULL, &childBlock, true, &it->second))
+                    {
+                        ++nLoaded;
+                        queue.push_back(childBlock.GetHash());
+                    }
+                }
+                range.first++;
+                mapBlocksUnknownParent.erase(it);
             }
         }
-    } catch (const std::runtime_error& e) {
-        AbortNode(std::string("System error: ") + e.what());
+    };
+
+    while (!aborted) {
+        BlockResult result;
+        if (!resultQueue.pop(result)) {
+            if (readerDone.load() && pending.empty())
+                break;
+            continue;
+        }
+        pending.emplace(result.seq, std::move(result));
+
+        auto it = pending.begin();
+        while (it != pending.end() && it->first == nextCommit && !aborted) {
+            BlockResult commitResult = std::move(it->second);
+            pending.erase(it++);
+            processResult(commitResult);
+            ++nextCommit;
+        }
     }
+
+    resultQueue.close();
+    taskQueue.close();
+
+    reader.join();
+    for (auto& worker : workers) {
+        if (worker.joinable())
+            worker.join();
+    }
+
     if (nLoaded > 0)
         LogPrintf("Loaded %i blocks from external file in %dms\n", nLoaded, GetTimeMillis() - nStart);
-    return nLoaded > 0;
+    return nLoaded > 0 && !aborted;
 }
 
 void static CheckBlockIndex(const Consensus::Params& consensusParams)

@@ -130,6 +130,9 @@ public:
     bool ReadTimestampBlockIndex(const uint256 &hash, unsigned int &logicalTS);
     bool WriteFlag(const std::string &name, bool fValue);
     bool ReadFlag(const std::string &name, bool &fValue);
+    bool LoadBlockIndexGutsSerial(std::function<CBlockIndex*(const uint256&)> insertBlockIndex);
+    bool LoadBlockIndexGutsParallel(std::function<CBlockIndex*(const uint256&)> insertBlockIndex);
+    bool LoadBlockIndexGutsParallel(std::function<CBlockIndex*(const uint256&)> insertBlockIndex, uint64_t maxBufferBytes);
     bool LoadBlockIndexGuts(std::function<CBlockIndex*(const uint256&)> insertBlockIndex);
     bool blockOnchainActive(const uint256 &hash);
     UniValue Snapshot(int top);

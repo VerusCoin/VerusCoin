@@ -8,6 +8,12 @@
 #include "util/crc32c.h"
 
 #include <stdint.h>
+#include <string.h>
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#include <cpuid.h>
+#include <nmmintrin.h>
+#define LEVELDB_CRC32C_SSE42 1
+#endif
 #include "util/coding.h"
 
 namespace leveldb {
@@ -283,7 +289,8 @@ static inline uint32_t LE_LOAD32(const uint8_t *p) {
   return DecodeFixed32(reinterpret_cast<const char*>(p));
 }
 
-uint32_t Extend(uint32_t crc, const char* buf, size_t size) {
+uint32_t ExtendTable(uint32_t crc, const char* buf, size_t size) {
+  if (size == 0) return crc;
   const uint8_t *p = reinterpret_cast<const uint8_t *>(buf);
   const uint8_t *e = p + size;
   uint32_t l = crc ^ 0xffffffffu;
@@ -326,6 +333,60 @@ uint32_t Extend(uint32_t crc, const char* buf, size_t size) {
 #undef STEP4
 #undef STEP1
   return l ^ 0xffffffffu;
+}
+
+#ifdef LEVELDB_CRC32C_SSE42
+__attribute__((target("sse4.2")))
+static uint32_t ExtendSSE42(uint32_t crc, const char* p, size_t n) {
+  uint32_t c = crc ^ 0xffffffffu;
+#if defined(__x86_64__)
+  uint64_t wide = c;
+  while (n >= 8) {
+    uint64_t word;
+    memcpy(&word, p, sizeof(word)); // unaligned and alias-safe
+    wide = _mm_crc32_u64(wide, word);
+    p += 8; n -= 8;
+  }
+  c = static_cast<uint32_t>(wide);
+#endif
+  while (n >= 4) {
+    uint32_t word;
+    memcpy(&word, p, sizeof(word));
+    c = _mm_crc32_u32(c, word);
+    p += 4; n -= 4;
+  }
+  while (n--) c = _mm_crc32_u8(c, static_cast<unsigned char>(*p++));
+  return c ^ 0xffffffffu;
+}
+#endif
+
+bool HardwareAvailable() {
+#ifdef LEVELDB_CRC32C_SSE42
+  static const bool available = [] {
+    unsigned int a,b,c,d;
+    return __get_cpuid(1,&a,&b,&c,&d) && (c & bit_SSE4_2);
+  }();
+  return available;
+#else
+  return false;
+#endif
+}
+
+uint32_t ExtendHardware(uint32_t crc, const char* p, size_t n) {
+#ifdef LEVELDB_CRC32C_SSE42
+  if (HardwareAvailable()) return ExtendSSE42(crc,p,n);
+#endif
+  return ExtendTable(crc,p,n);
+}
+
+uint32_t Extend(uint32_t crc, const char* p, size_t n) {
+  typedef uint32_t (*ExtendFunction)(uint32_t,const char*,size_t);
+#ifdef LEVELDB_CRC32C_SSE42
+  static const ExtendFunction extend = HardwareAvailable() ? ExtendSSE42 : ExtendTable;
+#else
+  static const ExtendFunction extend = ExtendTable;
+#endif
+  return extend(crc,p,n);
 }
 
 }  // namespace crc32c

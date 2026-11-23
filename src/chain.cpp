@@ -5,6 +5,9 @@
 
 #include "chain.h"
 
+#include <stdexcept>
+#include "mmr_parallel.h"
+
 using namespace std;
 
 /**
@@ -25,6 +28,52 @@ void CChain::SetTip(CBlockIndex *pindex) {
         pindex = pindex->pprev;
     }
     mmr.Truncate(vChain.size() - modCount);
+    if (modCount > 65536)
+    {
+        const size_t begin = vChain.size() - modCount;
+        const size_t workers = std::min(size_t(16), size_t(modCount / 65536));
+        std::vector<ChainMMRNode> leaves(modCount);
+        MMRParallelFor(leaves.size(), workers, [&](size_t i) {
+            leaves[i] = vChain[begin + i]->GetBlockMMRNode();
+        });
+#ifdef VERUS_MMR_VERIFY
+        CMerkleMountainRange<ChainMMRNode> reference;
+        for (size_t i = 0; i < begin; ++i) reference.Add(mmr.layer0[i]);
+        for (const auto &leaf : leaves) reference.Add(leaf);
+#endif
+        AppendMMRParallel(mmr, leaves, workers);
+#ifdef VERUS_MMR_VERIFY
+        if (reference.upperNodes.size() != mmr.upperNodes.size())
+        {
+            LogPrintf("VERUS_MMR_VERIFY: layer count mismatch\n");
+            assert(false);
+            throw std::logic_error("VERUS_MMR_VERIFY: layer count mismatch");
+        }
+        for (size_t level = 0; level <= reference.upperNodes.size(); ++level)
+        {
+            const size_t expected = level ? reference.upperNodes[level - 1].size() : reference.size();
+            const size_t actual = level ? mmr.upperNodes[level - 1].size() : mmr.size();
+            if (expected != actual)
+            {
+                LogPrintf("VERUS_MMR_VERIFY: size mismatch level=%u index=%u\n", (unsigned)level, (unsigned)actual);
+                assert(false);
+                throw std::logic_error("VERUS_MMR_VERIFY: size mismatch");
+            }
+            for (size_t i = 0; i < expected; ++i)
+            {
+                const ChainMMRNode a = reference.GetNode(level, i);
+                const ChainMMRNode b = mmr.GetNode(level, i);
+                if (a.hash != b.hash || a.power != b.power)
+                {
+                    LogPrintf("VERUS_MMR_VERIFY: mismatch level=%u index=%u\n", (unsigned)level, (unsigned)i);
+                    assert(false);
+                    throw std::logic_error("VERUS_MMR_VERIFY: node mismatch");
+                }
+            }
+        }
+#endif
+        return;
+    }
     for (int i = (vChain.size() - modCount); i < vChain.size(); i++)
     {
         // add this block to the Merkle Mountain Range
@@ -322,37 +371,143 @@ CChainPower::CChainPower(CBlockIndex *pblockIndex, const arith_uint256 &stake, c
      chainWork = work;
 }
 
-bool operator==(const CChainPower &p1, const CChainPower &p2)
+
+namespace {
+
+#ifdef __SIZEOF_INT128__
+// Keep the literal wrapped expression as both the fallback and debug oracle.
+inline arith_uint256 CertifiedRatio16(const arith_uint256 &value,
+                                     const arith_uint256 &divisor, uint64_t q)
+{
+    const arith_uint256 result(q);
+#ifdef VERUS_CHAINPOWER_VERIFY
+    if (result != (value << 16) / divisor)
+        throw std::logic_error("VERUS_CHAINPOWER_VERIFY: scaled ratio mismatch");
+#endif
+    return result;
+}
+#endif
+
+// Estimate from the WRAPPED numerator, then certify with non-wrapping
+// five-limb bounds. No arith_uint256 multiply or repeated limb shifts.
+arith_uint256 ScaledRatio16(const arith_uint256 &value, const arith_uint256 &divisor)
+{
+#ifdef __SIZEOF_INT128__
+    // base_uint<256> stores eight native uint32_t limbs, low limb first.
+    // memcpy avoids aliasing violations and works on either host byte order.
+    uint32_t v[8], d[8];
+    static_assert(sizeof(value) == sizeof(v), "arith_uint256 limb layout");
+    std::memcpy(v, &value, sizeof(v));
+    std::memcpy(d, &divisor, sizeof(d));
+    uint64_t vl[4], dl[4], n[4];
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        vl[i] = uint64_t(v[2 * i]) | (uint64_t(v[2 * i + 1]) << 32);
+        dl[i] = uint64_t(d[2 * i]) | (uint64_t(d[2 * i + 1]) << 32);
+        n[i] = (vl[i] << 16) | (i ? vl[i - 1] >> 48 : 0);
+    }
+    if (!(dl[0] | dl[1] | dl[2] | dl[3])) return (value << 16) / divisor;
+    bool valueAtMostDivisor = true;
+    for (int i = 3; i >= 0; --i)
+        if (vl[i] != dl[i])
+        {
+            valueAtMostDivisor = vl[i] < dl[i];
+            break;
+        }
+    if (valueAtMostDivisor)
+    {
+        // Exact original <=112-bit guard, without bits() scans or a static
+        // TWO_POW112 object (whose inclusive comparison admits 113 bits).
+        if (!(dl[2] | dl[3]) && !(dl[1] >> 48))
+        {
+            const unsigned __int128 num = ((unsigned __int128)vl[1] << 64) | vl[0];
+            const unsigned __int128 den = ((unsigned __int128)dl[1] << 64) | dl[0];
+            return CertifiedRatio16(value, divisor, uint64_t((num << 16) / den));
+        }
+        unsigned k = 3;
+        while (!dl[k]) --k;
+        const unsigned bits = 64 - __builtin_clzll(dl[k]);
+        // Normalize denominator to 64 bits; numerator needs up to 80 bits.
+        // Truncating it to GetLow64() loses significant wrapped bits when
+        // divisor has 241..255 bits, causing the previous frequent fallback.
+        const uint64_t den = bits == 64 ? dl[k] :
+            (dl[k] << (64 - bits)) | (k ? dl[k - 1] >> bits : 0);
+        const unsigned __int128 num = bits == 64 ? n[k] :
+            ((unsigned __int128)n[k] << (64 - bits)) | (k ? n[k - 1] >> bits : 0);
+        const unsigned __int128 hi = k < 3 ?
+            (unsigned __int128)n[k + 1] << (bits == 64 ? 64 : 128 - bits) : 0;
+        // q <= 65536 because value <= divisor, including after shift-wrap.
+        // With a normalized >=2^63 denominator the discarded window changes
+        // the estimate by at most one. Bounds below remain the authority.
+        const uint64_t q0 = uint64_t((num | hi) / den);
+        if (q0 <= 65536)
+        {
+            const uint64_t candidates[3] = {q0, q0 ? q0 - 1 : 0, q0 + 1};
+            for (uint64_t c : candidates)
+            {
+                // 256 x <=17-bit scalar, retaining the fifth carry limb.
+                unsigned __int128 carry = 0;
+                uint64_t product[5];
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    carry += (unsigned __int128)dl[i] * c;
+                    product[i] = uint64_t(carry);
+                    carry >>= 64;
+                }
+                product[4] = uint64_t(carry);
+                auto atMost = [&]() {
+                    if (product[4]) return false;
+                    for (int i = 3; i >= 0; --i)
+                        if (product[i] != n[i]) return product[i] < n[i];
+                    return true;
+                };
+                if (!atMost()) continue;
+                carry = 0;
+                for (unsigned i = 0; i < 4; ++i)
+                {
+                    carry += (unsigned __int128)product[i] + dl[i];
+                    product[i] = uint64_t(carry);
+                    carry >>= 64;
+                }
+                product[4] += uint64_t(carry);
+                if (!atMost()) return CertifiedRatio16(value, divisor, c);
+            }
+        }
+    }
+#endif
+    return (value << 16) / divisor;
+}
+
+} // anonymous namespace
+
+// Pair-local only: divisors depend on BOTH operands. Never cache by index.
+int CompareChainPower(const CChainPower &p1, const CChainPower &p2)
 {
     arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
+    const arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
+    const arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
+    const arith_uint256 score1 = ScaledRatio16(p1.chainWork, workDivisor) + ScaledRatio16(p1.chainStake, stakeDivisor);
+    const arith_uint256 score2 = ScaledRatio16(p2.chainWork, workDivisor) + ScaledRatio16(p2.chainStake, stakeDivisor);
+    // Each value <= its pair-selected divisor. Wrapping the numerator can
+    // only reduce it, so each quotient <= 65536 and each existing 256-bit
+    // sum <= 131072. Their signed low-limb difference is the exact relation.
+    const int delta = int(score1.GetLow64()) - int(score2.GetLow64());
+    return (delta > 0) - (delta < 0);
+}
 
-    // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) ==
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+bool operator==(const CChainPower &p1, const CChainPower &p2)
+{
+    return CompareChainPower(p1, p2) == 0;
 }
 
 bool operator<(const CChainPower &p1, const CChainPower &p2)
 {
-    arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
-
-    // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) <
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+    return CompareChainPower(p1, p2) < 0;
 }
 
 bool operator<=(const CChainPower &p1, const CChainPower &p2)
 {
-    arith_uint256 bigZero = arith_uint256(0);
-    arith_uint256 workDivisor = p1.chainWork > p2.chainWork ? p1.chainWork : (p2.chainWork != bigZero ? p2.chainWork : 1);
-    arith_uint256 stakeDivisor = p1.chainStake > p2.chainStake ? p1.chainStake : (p2.chainStake != bigZero ? p2.chainStake : 1);
-
-    // use up 16 bits for precision
-    return ((p1.chainWork << 16) / workDivisor + (p1.chainStake << 16) / stakeDivisor) <=
-            ((p2.chainWork << 16) / workDivisor + (p2.chainStake << 16) / stakeDivisor);
+    return CompareChainPower(p1, p2) <= 0;
 }
 
 CChainPower CChainPower::ExpandCompactPower(uint256 compactPower, uint32_t height)
